@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ServiceItem = { icon: React.ReactNode; title: string; desc: string };
+type ServiceItem = { icon: React.ReactNode; title: string; desc: string; badge?: string };
 
 // ─── Section Label ────────────────────────────────────────────────────────────
 
