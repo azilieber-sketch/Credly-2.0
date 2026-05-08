@@ -5,15 +5,6 @@ import { useRouter } from "next/navigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type MessageCardProps = {
-  label: string;
-  labelClass: string;
-  customer: string;
-  ai: string;
-  className?: string;
-  creditBadge?: boolean;
-};
-
 type ServiceItem = { icon: React.ReactNode; title: string; desc: string };
 
 // ─── Section Label ────────────────────────────────────────────────────────────
@@ -105,7 +96,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 
-const NAV_IDS = ["home", "services", "about", "pricing", "contact", "faq"] as const;
+const NAV_IDS = ["home", "how-it-works", "features", "pricing", "faq"] as const;
 
 const Navbar = ({ onAuth }: { onAuth: () => void }) => {
   const [active, setActive] = useState<string>("home");
@@ -133,20 +124,16 @@ const Navbar = ({ onAuth }: { onAuth: () => void }) => {
 
   return (
     <nav className="w-full px-8 py-5 flex items-center justify-between border-b border-stone-200/60 bg-white/90 backdrop-blur-md sticky top-0 z-50">
-      <a
-        href="#home"
-        className="text-xl font-bold tracking-tight text-gray-900 hover:text-indigo-600 transition-colors"
-      >
+      <a href="#home" className="text-xl font-bold tracking-tight text-gray-900 hover:text-indigo-600 transition-colors">
         Credly
       </a>
 
       <div className="hidden md:flex items-center gap-8">
-        <a href="#home" className={linkClass("home")}>Home</a>
-        <a href="#services" className={linkClass("services")}>Services</a>
-        <a href="#about" className={linkClass("about")}>About</a>
-        <a href="#pricing" className={linkClass("pricing")}>Pricing</a>
-        <a href="#contact" className={linkClass("contact")}>Contact</a>
-        <a href="#faq" className={linkClass("faq")}>FAQ</a>
+        <a href="#home"         className={linkClass("home")}>Home</a>
+        <a href="#how-it-works" className={linkClass("how-it-works")}>How it works</a>
+        <a href="#features"     className={linkClass("features")}>Features</a>
+        <a href="#pricing"      className={linkClass("pricing")}>Pricing</a>
+        <a href="#faq"          className={linkClass("faq")}>FAQ</a>
       </div>
 
       <div className="flex items-center gap-3">
@@ -167,39 +154,75 @@ const Navbar = ({ onAuth }: { onAuth: () => void }) => {
   );
 };
 
-// ─── Message Card ─────────────────────────────────────────────────────────────
+// ─── Hero visual ──────────────────────────────────────────────────────────────
 
-const MessageCard = ({
-  label, labelClass, customer, ai, className = "", creditBadge = false,
-}: MessageCardProps) => (
-  <div className={`bg-white rounded-2xl shadow-lg shadow-stone-200/60 border border-stone-100 p-5 w-72 ${className}`}>
-    <div className="flex items-center justify-between mb-4">
-      <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${labelClass}`}>
-        {label}
-      </span>
-      {creditBadge && (
-        <span className="text-[11px] text-stone-400 font-medium tabular-nums">
-          Credits used: 12
-        </span>
-      )}
+const WorkflowPreview = () => (
+  <div className="relative h-[520px] hidden lg:flex items-center justify-center">
+    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+      <div className="w-96 h-96 rounded-full bg-violet-100 opacity-25 blur-3xl" />
     </div>
 
-    <div className="flex items-end gap-2 mb-3">
-      <div className="w-7 h-7 rounded-full bg-stone-200 flex-shrink-0 flex items-center justify-center text-[11px] font-semibold text-stone-500">
-        C
+    {/* Main workflow card */}
+    <div className="relative z-10 bg-white rounded-3xl shadow-xl shadow-stone-200/60 border border-stone-100 p-5 w-80">
+
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-xs font-semibold text-stone-500">Live queue</span>
+        </div>
+        <span className="text-[11px] text-stone-400 font-medium bg-stone-50 border border-stone-100 px-2 py-0.5 rounded-full">14 open</span>
       </div>
-      <div className="bg-stone-100 rounded-2xl rounded-bl-none px-3 py-2 text-sm text-stone-700 leading-snug max-w-[200px]">
-        {customer}
+
+      {/* Customer message */}
+      <div className="flex items-end gap-2 mb-3">
+        <div className="w-6 h-6 rounded-full bg-stone-200 flex-shrink-0 flex items-center justify-center text-[10px] font-semibold text-stone-500">S</div>
+        <div className="bg-stone-100 rounded-2xl rounded-bl-none px-3 py-2 text-sm text-stone-700 leading-snug">
+          Where is my order? It&apos;s been 3 days.
+        </div>
+      </div>
+
+      {/* AI draft */}
+      <div className="bg-indigo-50 border border-indigo-100 rounded-xl px-3 py-2.5 mb-3">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+          <span className="text-[10px] font-semibold text-indigo-500 uppercase tracking-widest">AI draft</span>
+        </div>
+        <p className="text-sm text-stone-700 leading-snug">
+          Hi Sarah! Your order shipped yesterday and arrives today by 6 PM.
+        </p>
+      </div>
+
+      {/* Agent action row */}
+      <div className="flex items-center gap-2">
+        <button className="text-xs font-semibold bg-indigo-600 text-white px-3 py-1.5 rounded-lg">Send</button>
+        <button className="text-xs font-medium text-stone-500 border border-stone-200 px-3 py-1.5 rounded-lg">Edit</button>
+        <span className="text-[11px] text-stone-400 ml-auto">Reviewed in 6s</span>
       </div>
     </div>
 
-    <div className="flex items-end justify-end gap-2">
-      <div className="bg-violet-50 rounded-2xl rounded-br-none px-3 py-2 text-sm text-violet-800 leading-snug max-w-[200px]">
-        {ai}
+    {/* Resolved badge */}
+    <div className="absolute bottom-16 right-4 z-20 bg-white rounded-2xl shadow-lg shadow-stone-200/60 border border-stone-100 px-4 py-3 flex items-center gap-2.5">
+      <div className="w-7 h-7 rounded-xl bg-emerald-50 flex items-center justify-center flex-shrink-0">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+          <path d="M13 4L6.5 11 3 7.5" stroke="#10b981" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </div>
-      <div className="w-7 h-7 rounded-full bg-violet-100 flex-shrink-0 flex items-center justify-center text-[11px] font-bold text-violet-600">
-        AI
+      <div>
+        <p className="text-xs font-semibold text-gray-900">Resolved in 47s</p>
+        <p className="text-[10px] text-stone-400">Agent approved · AI assisted</p>
       </div>
+    </div>
+
+    {/* Human control badge */}
+    <div className="absolute top-12 right-8 z-20 bg-white rounded-2xl shadow-lg shadow-stone-200/60 border border-stone-100 px-3 py-2.5 flex items-center gap-2">
+      <div className="w-6 h-6 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+        </svg>
+      </div>
+      <p className="text-xs font-semibold text-gray-900">Human in control</p>
     </div>
   </div>
 );
@@ -208,30 +231,24 @@ const MessageCard = ({
 
 const Hero = ({ onAuth }: { onAuth: () => void }) => (
   <section id="home" className="relative bg-stone-50 overflow-hidden min-h-[calc(100vh-73px)] flex items-center px-8 py-20 lg:py-0">
-    {/* Indigo glow — top center */}
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(99,102,241,0.11),transparent)] pointer-events-none" />
-    {/* Amber warmth — bottom right */}
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_90%_95%,rgba(251,191,36,0.09),transparent)] pointer-events-none" />
 
     <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative">
       <div className="flex flex-col gap-10">
         <div className="flex flex-col gap-5">
           <div className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 text-xs font-semibold px-3 py-1.5 rounded-full w-fit border border-amber-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-            AI-powered customer support
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Human-led · AI-powered
           </div>
 
           <h1 className="text-6xl lg:text-[4.5rem] font-extrabold tracking-tight text-gray-900 leading-[1.04]">
-            Your support,<br />
-            <span className="text-indigo-600">handled by AI.</span>
+            Your support team,<br />
+            <span className="text-indigo-600">built to scale.</span>
           </h1>
 
-          <p className="text-xl font-semibold text-violet-600 tracking-tight">
-            Pay only for what you use.
-          </p>
-
           <p className="text-lg text-stone-500 leading-relaxed max-w-lg">
-            Credly uses AI agents to handle your customer support — powered by a flexible credit system with no retainers or wasted spend.
+            Credly gives customer support teams AI-powered workflows to resolve faster, escalate smarter, and deliver better experiences — without losing the human touch.
           </p>
         </div>
 
@@ -242,76 +259,61 @@ const Hero = ({ onAuth }: { onAuth: () => void }) => (
           >
             Start free
           </button>
-          <button
-            onClick={onAuth}
-            className="inline-flex items-center justify-center text-stone-600 text-base font-medium px-7 py-3.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all"
+          <a
+            href="#how-it-works"
+            className="inline-flex items-center justify-center text-stone-600 text-base font-medium px-7 py-3.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all gap-2"
           >
-            Already a client? Sign in
-          </button>
+            See how it works
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </a>
         </div>
       </div>
 
-      <div className="relative h-[520px] hidden lg:block">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-96 h-96 rounded-full bg-violet-100 opacity-30 blur-3xl" />
-        </div>
-
-        <MessageCard
-          label="Order Status"
-          labelClass="bg-amber-50 text-amber-700 border border-amber-100"
-          customer="Where is my order? It's been 3 days."
-          ai="Your order is on its way! Expected delivery is tomorrow by 6 PM."
-          creditBadge
-          className="absolute top-4 left-0 -rotate-2 z-10"
-        />
-        <MessageCard
-          label="Returns"
-          labelClass="bg-emerald-50 text-emerald-700 border border-emerald-100"
-          customer="Can I return this? I ordered the wrong size."
-          ai="Of course! You have 30 days to return. I've started the process for you."
-          className="absolute top-40 right-0 rotate-1 z-20"
-        />
-        <MessageCard
-          label="Shipping"
-          labelClass="bg-sky-50 text-sky-700 border border-sky-100"
-          customer="Do you ship internationally?"
-          ai="Yes! We ship to 50+ countries. Standard delivery takes 5–10 business days."
-          className="absolute bottom-4 left-10 -rotate-1 z-30"
-        />
-      </div>
+      <WorkflowPreview />
     </div>
   </section>
 );
 
-// ─── Services ─────────────────────────────────────────────────────────────────
+// ─── Trust bar ────────────────────────────────────────────────────────────────
 
-const services: ServiceItem[] = [
-  {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-    ),
-    title: "AI Support Agents",
-    desc: "AI agents handle customer inquiries across email and chat — 24/7, with no wait times.",
-  },
+const TRUST_STATS = [
+  { value: "3×",      label: "faster ticket resolution"     },
+  { value: "68%",     label: "queries handled with AI"       },
+  { value: "< 2 min", label: "average first response"        },
+  { value: "100%",    label: "human oversight maintained"    },
+];
+
+const TrustBar = () => (
+  <div className="bg-white border-y border-stone-200/60 px-8 py-6">
+    <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-x-10 gap-y-4">
+      {TRUST_STATS.map((s, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div className="text-center">
+            <span className="text-xl font-black text-gray-900 tabular-nums">{s.value}</span>
+            <span className="text-sm text-stone-400 ml-2">{s.label}</span>
+          </div>
+          {i < TRUST_STATS.length - 1 && (
+            <span className="hidden sm:block w-px h-5 bg-stone-200" />
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ─── Value props ──────────────────────────────────────────────────────────────
+
+const VALUE_PROPS = [
   {
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
       </svg>
     ),
-    title: "Instant Responses",
-    desc: "Customers get accurate answers the moment they ask. No queues, no delays.",
-  },
-  {
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 20V10M12 20V4M6 20v-6" />
-      </svg>
-    ),
-    title: "Credit Dashboard",
-    desc: "Track usage, credits spent, and conversation volume in real time from your dashboard.",
+    title: "Move faster, without sacrificing quality",
+    desc: "AI agents draft responses and surface relevant context instantly — giving your team everything they need to reply in seconds, not minutes.",
   },
   {
     icon: (
@@ -321,35 +323,44 @@ const services: ServiceItem[] = [
         <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
       </svg>
     ),
-    title: "Human Escalation",
-    desc: "When AI needs help, it hands off to your team with full conversation context attached.",
+    title: "Your team stays in command",
+    desc: "Every AI suggestion is a starting point, not an endpoint. Agents review, edit, and approve every response. Full visibility, always.",
+  },
+  {
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 20V10M12 20V4M6 20v-6" />
+      </svg>
+    ),
+    title: "Handle more without hiring more",
+    desc: "Extend your team's capacity with AI that handles routine queries automatically, freeing your agents for complex, high-value conversations.",
   },
 ];
 
-const Services = () => (
-  <section id="services" className="bg-stone-50 py-28 px-8">
+const ValueProps = () => (
+  <section className="bg-stone-50 py-28 px-8">
     <div className="max-w-7xl mx-auto">
       <div className="text-center mb-16">
-        <SectionLabel>Services</SectionLabel>
+        <SectionLabel>Why Credly</SectionLabel>
         <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
-          Everything you need
+          Built for teams, not to replace them.
         </h2>
         <p className="text-stone-500 mt-4 text-lg max-w-xl mx-auto leading-relaxed">
-          Built for ecommerce brands that want support that scales without the overhead.
+          AI that works alongside your people — accelerating operations while keeping humans at the centre of every customer relationship.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {services.map((s) => (
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {VALUE_PROPS.map((v) => (
           <div
-            key={s.title}
-            className="bg-white rounded-3xl p-7 border border-stone-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+            key={v.title}
+            className="bg-white rounded-3xl p-8 border border-stone-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
           >
             <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 mb-5">
-              {s.icon}
+              {v.icon}
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-2">{s.title}</h3>
-            <p className="text-sm text-stone-500 leading-relaxed">{s.desc}</p>
+            <h3 className="text-base font-bold text-gray-900 mb-3 leading-snug">{v.title}</h3>
+            <p className="text-sm text-stone-500 leading-relaxed">{v.desc}</p>
           </div>
         ))}
       </div>
@@ -357,42 +368,42 @@ const Services = () => (
   </section>
 );
 
-// ─── About ────────────────────────────────────────────────────────────────────
+// ─── How it works ─────────────────────────────────────────────────────────────
 
-const steps = [
+const HOW_STEPS = [
   {
     num: "01",
-    title: "Connect your channels",
-    desc: "Plug in email and chat in minutes. No complex setup, no developer required.",
+    title: "Connect your support channels",
+    desc: "Plug in email and chat in minutes. No complex setup, no developer required. Your existing workflows stay intact.",
   },
   {
     num: "02",
-    title: "AI handles conversations",
-    desc: "Your AI agent reads, understands, and replies to customer inquiries instantly — 24/7.",
+    title: "AI drafts, your team decides",
+    desc: "AI agents surface context and suggest responses in real time. Your agents review and send in seconds — or take over the moment it matters.",
   },
   {
     num: "03",
-    title: "Pay per credit used",
-    desc: "Each resolved conversation costs one credit. Buy more when needed. No subscriptions.",
+    title: "Resolve faster, retain more",
+    desc: "Customers get faster, more consistent responses. Your team handles more without burning out. Your brand stays exactly as you intend it.",
   },
 ];
 
-const About = () => (
-  <section id="about" className="relative bg-white py-28 px-8 overflow-hidden">
+const HowItWorks = () => (
+  <section id="how-it-works" className="relative bg-white py-28 px-8 overflow-hidden">
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_100%_100%,rgba(99,102,241,0.04),transparent)] pointer-events-none" />
     <div className="max-w-7xl mx-auto relative">
       <div className="text-center mb-16">
-        <SectionLabel>About</SectionLabel>
+        <SectionLabel>How it works</SectionLabel>
         <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
-          How Credly works
+          From setup to faster support<br />in three steps.
         </h2>
         <p className="text-stone-500 mt-4 text-lg max-w-xl mx-auto leading-relaxed">
-          Three steps from sign-up to fully automated customer support.
+          Credly fits into your existing operation — no rebuilding required.
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {steps.map((s) => (
+        {HOW_STEPS.map((s) => (
           <div
             key={s.num}
             className="bg-white rounded-3xl p-8 border border-stone-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
@@ -400,6 +411,140 @@ const About = () => (
             <span className="text-5xl font-black text-amber-100 leading-none">{s.num}</span>
             <h3 className="text-xl font-bold text-gray-900 mt-5 mb-2">{s.title}</h3>
             <p className="text-stone-500 leading-relaxed">{s.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+// ─── Features ─────────────────────────────────────────────────────────────────
+
+const FEATURES: ServiceItem[] = [
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </svg>
+    ),
+    title: "AI response drafting",
+    desc: "Instant draft responses based on conversation history and your knowledge base. Agents send in seconds.",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+      </svg>
+    ),
+    title: "Smart escalation routing",
+    desc: "AI detects when a conversation needs human attention and routes it to the right team member instantly.",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+      </svg>
+    ),
+    title: "Full audit trail",
+    desc: "Every interaction, AI suggestion, and agent action is logged. Full visibility for compliance and quality review.",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" />
+      </svg>
+    ),
+    title: "Credit-based billing",
+    desc: "Pay per resolved conversation. No seats, no monthly minimums, no wasted budget when volume is low.",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 20V10M12 20V4M6 20v-6" />
+      </svg>
+    ),
+    title: "Usage & performance insights",
+    desc: "Real-time dashboards showing ticket volume, response times, AI assist rates, and team performance.",
+  },
+  {
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+    ),
+    title: "Integrations",
+    desc: "Shopify, Zendesk, and Gorgias connections to enrich AI context with order and customer data.",
+    badge: "Coming soon",
+  },
+];
+
+const Features = () => (
+  <section id="features" className="bg-stone-50 py-28 px-8">
+    <div className="max-w-7xl mx-auto">
+      <div className="text-center mb-16">
+        <SectionLabel>Features</SectionLabel>
+        <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
+          Everything your team needs<br />to operate at full capacity.
+        </h2>
+        <p className="text-stone-500 mt-4 text-lg max-w-xl mx-auto leading-relaxed">
+          A complete support infrastructure — from AI drafting to billing to performance insights.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        {FEATURES.map((f) => (
+          <div
+            key={f.title}
+            className="bg-white rounded-3xl p-7 border border-stone-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                {f.icon}
+              </div>
+              {"badge" in f && f.badge && (
+                <span className="text-[10px] font-semibold tracking-wider uppercase bg-stone-100 text-stone-400 px-2 py-0.5 rounded-md">
+                  {f.badge}
+                </span>
+              )}
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-2">{f.title}</h3>
+            <p className="text-sm text-stone-500 leading-relaxed">{f.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+const STATS_DATA = [
+  { value: "3×",      label: "More tickets handled",    sub: "per agent per day"              },
+  { value: "68%",     label: "AI-assisted resolutions", sub: "of total query volume"           },
+  { value: "< 2 min", label: "Avg first response",      sub: "down from 18 min industry avg"  },
+  { value: "100%",    label: "Human oversight",         sub: "on every customer interaction"  },
+];
+
+const Stats = () => (
+  <section className="bg-white py-28 px-8">
+    <div className="max-w-7xl mx-auto">
+      <div className="text-center mb-14">
+        <SectionLabel>Results</SectionLabel>
+        <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
+          What teams achieve<br />with Credly.
+        </h2>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+        {STATS_DATA.map((s) => (
+          <div
+            key={s.value}
+            className="bg-stone-50 rounded-3xl p-8 border border-stone-100 text-center"
+          >
+            <p className="text-4xl lg:text-5xl font-black text-indigo-600 leading-none mb-3 tabular-nums">{s.value}</p>
+            <p className="text-sm font-bold text-gray-900 mb-1">{s.label}</p>
+            <p className="text-xs text-stone-400 leading-relaxed">{s.sub}</p>
           </div>
         ))}
       </div>
@@ -415,11 +560,11 @@ const plans = [
     credits: "500 credits",
     price: "$49",
     unit: "one-time",
-    desc: "Perfect for small shops just getting started with AI support.",
+    desc: "For small support teams starting to bring AI into their workflow.",
     features: [
-      "500 customer conversations",
-      "Email support channel",
-      "Basic analytics",
+      "500 AI-assisted conversations",
+      "Email channel support",
+      "Usage analytics",
       "7-day credit rollover",
     ],
     highlight: false,
@@ -429,13 +574,13 @@ const plans = [
     credits: "2,000 credits",
     price: "$149",
     unit: "one-time",
-    desc: "For growing brands that need reliable, scalable support.",
+    desc: "For growing teams that need reliable, scalable AI support infrastructure.",
     features: [
-      "2,000 customer conversations",
+      "2,000 AI-assisted conversations",
       "Email + live chat channels",
       "Full analytics dashboard",
       "30-day credit rollover",
-      "Human escalation",
+      "Human takeover controls",
     ],
     highlight: true,
   },
@@ -444,32 +589,22 @@ const plans = [
     credits: "10,000 credits",
     price: "$499",
     unit: "one-time",
-    desc: "High-volume support for established ecommerce brands.",
+    desc: "For high-volume teams that need enterprise-grade support operations.",
     features: [
-      "10,000 customer conversations",
+      "10,000 AI-assisted conversations",
       "All channels",
       "Priority routing",
       "90-day credit rollover",
-      "Human escalation",
-      "Dedicated support",
+      "Advanced human takeover controls",
+      "Dedicated success manager",
     ],
     highlight: false,
   },
 ];
 
 const Check = ({ light }: { light: boolean }) => (
-  <svg
-    className={`w-4 h-4 flex-shrink-0 ${light ? "text-white/60" : "text-indigo-500"}`}
-    fill="none"
-    viewBox="0 0 16 16"
-  >
-    <path
-      d="M13 4L6.5 11 3 7.5"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
+  <svg className={`w-4 h-4 flex-shrink-0 ${light ? "text-white/60" : "text-indigo-500"}`} fill="none" viewBox="0 0 16 16">
+    <path d="M13 4L6.5 11 3 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -479,10 +614,10 @@ const Pricing = ({ onAuth }: { onAuth: () => void }) => (
       <div className="text-center mb-16">
         <SectionLabel>Pricing</SectionLabel>
         <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
-          Buy credits, not subscriptions
+          Scale your team, not your costs.
         </h2>
         <p className="text-stone-500 mt-4 text-lg max-w-xl mx-auto leading-relaxed">
-          Top up when you need. No monthly retainers. No wasted spend.
+          Top up when you need more capacity. No subscriptions. No wasted spend.
         </p>
       </div>
 
@@ -524,10 +659,7 @@ const Pricing = ({ onAuth }: { onAuth: () => void }) => (
 
             <ul className="flex flex-col gap-2.5 mb-8">
               {p.features.map((feat) => (
-                <li
-                  key={feat}
-                  className={`flex items-center gap-2.5 text-sm ${p.highlight ? "text-indigo-100" : "text-stone-600"}`}
-                >
+                <li key={feat} className={`flex items-center gap-2.5 text-sm ${p.highlight ? "text-indigo-100" : "text-stone-600"}`}>
                   <Check light={p.highlight} />
                   {feat}
                 </li>
@@ -551,86 +683,32 @@ const Pricing = ({ onAuth }: { onAuth: () => void }) => (
   </section>
 );
 
-// ─── Contact ──────────────────────────────────────────────────────────────────
-
-const Contact = () => (
-  <section id="contact" className="bg-white py-28 px-8">
-    <div className="max-w-2xl mx-auto">
-      <div className="text-center mb-14">
-        <SectionLabel>Contact</SectionLabel>
-        <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
-          Get in touch
-        </h2>
-        <p className="text-stone-500 mt-4 text-lg leading-relaxed">
-          Have a question or want to learn more? We&apos;ll get back to you within one business day.
-        </p>
-      </div>
-
-      <div className="bg-white rounded-3xl border border-stone-100 shadow-sm p-8 flex flex-col gap-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide">
-              Name
-            </label>
-            <input
-              type="text"
-              placeholder="Jane Smith"
-              className="border border-stone-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide">
-              Email
-            </label>
-            <input
-              type="email"
-              placeholder="jane@yourbrand.com"
-              className="border border-stone-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide">
-            Message
-          </label>
-          <textarea
-            rows={4}
-            placeholder="Tell us about your support setup or ask us anything..."
-            className="border border-stone-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition resize-none bg-stone-50"
-          />
-        </div>
-
-        <button className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold rounded-xl px-4 py-3 text-sm hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all mt-2">
-          Send message
-        </button>
-      </div>
-    </div>
-  </section>
-);
-
 // ─── FAQ ──────────────────────────────────────────────────────────────────────
 
 const faqs = [
   {
+    q: "How does AI assist my support team?",
+    a: "AI agents work alongside your team in real time — drafting responses, surfacing relevant order and customer context, and flagging conversations that need human attention. Your agents review every suggestion before it reaches the customer.",
+  },
+  {
+    q: "Do my agents stay in control of responses?",
+    a: "Always. Every AI-generated draft is a suggestion, not an automated send. Your team reviews, edits, approves, or takes over at any point. Nothing goes to a customer without a human in the loop.",
+  },
+  {
     q: "What is a credit?",
-    a: "One credit equals one handled customer conversation. When the AI agent resolves an inquiry end-to-end, it uses one credit from your balance.",
+    a: "One credit equals one AI-assisted customer conversation. When your team resolves an inquiry using Credly's AI tools, it uses one credit from your balance.",
   },
   {
     q: "Do credits expire?",
     a: "Credits roll over depending on your plan — 7, 30, or 90 days. Unused credits carry forward within that window.",
   },
   {
-    q: "Can I buy more credits at any time?",
-    a: "Yes. Top up anytime from your dashboard with no waiting and no approval process.",
-  },
-  {
     q: "What channels does Credly support?",
-    a: "Currently email and live chat. More channels — including Instagram DMs and WhatsApp — are coming soon.",
+    a: "Currently email and live chat. Integrations with Shopify, Zendesk, and Gorgias are in development and coming soon.",
   },
   {
-    q: "What happens when the AI can't answer?",
-    a: "The AI escalates to your human team with full conversation context already attached. Nothing falls through the cracks.",
+    q: "When does AI hand off to my team?",
+    a: "AI automatically flags conversations that are complex, emotionally sensitive, or outside its confidence threshold — routing them to your team with full context already attached. Nothing falls through the cracks.",
   },
 ];
 
@@ -657,22 +735,14 @@ const FAQ = () => {
                 <span className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors pr-6 text-[15px]">
                   {faq.q}
                 </span>
-                <span
-                  className={`text-stone-400 flex-shrink-0 transition-transform duration-200 ${
-                    open === i ? "rotate-45" : ""
-                  }`}
-                >
+                <span className={`text-stone-400 flex-shrink-0 transition-transform duration-200 ${open === i ? "rotate-45" : ""}`}>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                     <path d="M10 4v12M4 10h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   </svg>
                 </span>
               </button>
 
-              <div
-                className={`overflow-hidden transition-all duration-200 ${
-                  open === i ? "max-h-40 pb-5" : "max-h-0"
-                }`}
-              >
+              <div className={`overflow-hidden transition-all duration-200 ${open === i ? "max-h-48 pb-5" : "max-h-0"}`}>
                 <p className="text-stone-500 leading-relaxed text-[15px]">{faq.a}</p>
               </div>
             </div>
@@ -683,6 +753,36 @@ const FAQ = () => {
   );
 };
 
+// ─── Final CTA ────────────────────────────────────────────────────────────────
+
+const FinalCTA = ({ onAuth }: { onAuth: () => void }) => (
+  <section className="bg-white py-28 px-8">
+    <div className="max-w-3xl mx-auto text-center">
+      <SectionLabel>Get started</SectionLabel>
+      <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900 mb-5">
+        Ready to build a faster<br />support operation?
+      </h2>
+      <p className="text-stone-500 text-lg leading-relaxed mb-10 max-w-xl mx-auto">
+        Join teams scaling their support without scaling their headcount. Set up in minutes, no developer required.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <button
+          onClick={onAuth}
+          className="inline-flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-base font-semibold px-8 py-3.5 rounded-xl hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all shadow-md shadow-indigo-300/30"
+        >
+          Start free — no credit card required
+        </button>
+        <button
+          onClick={onAuth}
+          className="inline-flex items-center justify-center text-stone-600 text-base font-medium px-8 py-3.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all"
+        >
+          Talk to our team
+        </button>
+      </div>
+    </div>
+  </section>
+);
+
 // ─── Footer ───────────────────────────────────────────────────────────────────
 
 const Footer = () => (
@@ -691,21 +791,20 @@ const Footer = () => (
       <div>
         <span className="text-white font-bold text-lg">Credly</span>
         <p className="text-sm mt-1.5 max-w-xs leading-relaxed">
-          AI-powered customer support for ecommerce brands.
+          AI-powered support infrastructure for modern teams.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-6 text-sm">
-        <a href="#services" className="hover:text-white transition-colors">Services</a>
-        <a href="#about" className="hover:text-white transition-colors">About</a>
-        <a href="#pricing" className="hover:text-white transition-colors">Pricing</a>
-        <a href="#contact" className="hover:text-white transition-colors">Contact</a>
-        <a href="#faq" className="hover:text-white transition-colors">FAQ</a>
-        <a href="#" className="hover:text-white transition-colors">Privacy</a>
-        <a href="#" className="hover:text-white transition-colors">Terms</a>
+        <a href="#how-it-works" className="hover:text-white transition-colors">How it works</a>
+        <a href="#features"     className="hover:text-white transition-colors">Features</a>
+        <a href="#pricing"      className="hover:text-white transition-colors">Pricing</a>
+        <a href="#faq"          className="hover:text-white transition-colors">FAQ</a>
+        <a href="#"             className="hover:text-white transition-colors">Privacy</a>
+        <a href="#"             className="hover:text-white transition-colors">Terms</a>
       </div>
 
-      <p className="text-xs text-zinc-700">© 2025 Credly. All rights reserved.</p>
+      <p className="text-xs text-zinc-700">© 2026 Credly. All rights reserved.</p>
     </div>
   </footer>
 );
@@ -721,11 +820,14 @@ export default function Home() {
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
       <Navbar onAuth={openAuth} />
       <Hero onAuth={openAuth} />
-      <Services />
-      <About />
+      <TrustBar />
+      <ValueProps />
+      <HowItWorks />
+      <Features />
+      <Stats />
       <Pricing onAuth={openAuth} />
-      <Contact />
       <FAQ />
+      <FinalCTA onAuth={openAuth} />
       <Footer />
     </main>
   );
