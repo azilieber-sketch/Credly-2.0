@@ -21,10 +21,14 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
   const [email, setEmail] = useState("");
   const router = useRouter();
 
+  const ADMIN_EMAIL = "admin@credly.com";
+
   const login = (emailValue?: string) => {
+    const isAdmin = emailValue === ADMIN_EMAIL;
     localStorage.setItem("isLoggedIn", "true");
+    localStorage.setItem("userRole", isAdmin ? "admin" : "client");
     if (emailValue) localStorage.setItem("userEmail", emailValue);
-    router.push("/dashboard");
+    router.push(isAdmin ? "/admin" : "/dashboard");
   };
 
   return (
@@ -88,6 +92,10 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
           By continuing you agree to our{" "}
           <a href="#" className="underline hover:text-stone-600 transition-colors">Terms</a> and{" "}
           <a href="#" className="underline hover:text-stone-600 transition-colors">Privacy Policy</a>.
+        </p>
+
+        <p className="text-[11px] text-stone-300 text-center mt-3">
+          Admin access: <span className="font-mono">admin@credly.com</span>
         </p>
       </div>
     </div>

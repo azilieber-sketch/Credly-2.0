@@ -74,6 +74,7 @@ export default function SettingsPage() {
     localStorage.removeItem("credly_admin_invoices");
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("userEmail");
+    localStorage.removeItem("userRole");
     localStorage.removeItem("userName");
     router.push("/");
   };

@@ -88,6 +88,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace("/");
       return;
     }
+    if (localStorage.getItem("userRole") !== "admin") {
+      router.replace("/dashboard");
+      return;
+    }
     setEmail(localStorage.getItem("userEmail"));
     setReady(true);
   }, [router]);
@@ -95,6 +99,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const logout = () => {
     localStorage.removeItem("isLoggedIn");
     localStorage.removeItem("userEmail");
+    localStorage.removeItem("userRole");
     router.push("/");
   };
 
