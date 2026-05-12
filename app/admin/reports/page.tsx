@@ -1,30 +1,111 @@
 "use client";
 
+import { useState } from "react";
+
+const REPORTS = [
+  {
+    id: 1,
+    title: "April 2026 — Platform Report",
+    period: "Apr 2026",
+    date: "May 1, 2026",
+    metrics: { credits: 6400, companies: 7, revenue: 944, resolutionRate: 91, newCompanies: 1 },
+    insight: "Forma Studio drove 38% of total credit consumption in April.",
+  },
+  {
+    id: 2,
+    title: "March 2026 — Platform Report",
+    period: "Mar 2026",
+    date: "Apr 1, 2026",
+    metrics: { credits: 5800, companies: 6, revenue: 795, resolutionRate: 89, newCompanies: 2 },
+    insight: "Two new companies onboarded. Reef Supply reached credit depletion.",
+  },
+  {
+    id: 3,
+    title: "February 2026 — Platform Report",
+    period: "Feb 2026",
+    date: "Mar 1, 2026",
+    metrics: { credits: 4600, companies: 5, revenue: 646, resolutionRate: 93, newCompanies: 0 },
+    insight: "Resolution rate hit 93% — highest on record. Shipping remains top query type.",
+  },
+  {
+    id: 4,
+    title: "January 2026 — Platform Report",
+    period: "Jan 2026",
+    date: "Feb 1, 2026",
+    metrics: { credits: 3900, companies: 5, revenue: 597, resolutionRate: 87, newCompanies: 1 },
+    insight: "Vega Commerce upgraded from Starter to Growth mid-month.",
+  },
+];
+
 export default function AdminReportsPage() {
+  const [downloaded, setDownloaded] = useState<number | null>(null);
+
+  const handleExport = (id: number) => {
+    setDownloaded(id);
+    setTimeout(() => setDownloaded(null), 2000);
+  };
+
   return (
-    <div className="max-w-3xl mx-auto px-8 py-10">
+    <div className="max-w-4xl mx-auto px-8 py-8">
 
-      <div className="mb-10">
-        <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-4">
-          Reports
-        </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Platform reports</h1>
-        <p className="text-stone-400 mt-2 text-sm">Aggregate usage and performance across all client accounts.</p>
+      <div className="mb-8">
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Admin</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Reports</h1>
+        <p className="text-sm text-zinc-400 mt-0.5">Monthly platform summaries across all companies.</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-12 flex flex-col items-center text-center">
-        <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-400 mb-4">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-          </svg>
-        </div>
-        <p className="text-sm font-semibold text-gray-900 mb-1">Admin reports coming soon</p>
-        <p className="text-sm text-stone-400 max-w-xs leading-relaxed">
-          Aggregate weekly and monthly reports across all companies will appear here.
-        </p>
-      </div>
+      <div className="flex flex-col gap-4">
+        {REPORTS.map((report) => (
+          <div key={report.id} className="bg-white rounded-xl border border-zinc-200 p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-zinc-900">{report.title}</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">Generated {report.date}</p>
+              </div>
+              <button
+                onClick={() => handleExport(report.id)}
+                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all flex-shrink-0 ${
+                  downloaded === report.id
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "text-zinc-500 border-zinc-200 hover:bg-zinc-50"
+                }`}
+              >
+                {downloaded === report.id ? (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
+                    Downloaded
+                  </>
+                ) : (
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" /></svg>
+                    Export
+                  </>
+                )}
+              </button>
+            </div>
 
+            <div className="grid grid-cols-5 gap-4 py-4 border-t border-b border-zinc-100">
+              {[
+                { label: "Credits",         value: report.metrics.credits.toLocaleString()                  },
+                { label: "Active cos.",      value: report.metrics.companies.toString()                      },
+                { label: "Revenue",          value: `$${report.metrics.revenue.toLocaleString()}`            },
+                { label: "Resolution rate",  value: `${report.metrics.resolutionRate}%`, color: "text-emerald-600" },
+                { label: "New signups",      value: report.metrics.newCompanies.toString()                   },
+              ].map((m) => (
+                <div key={m.label}>
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">{m.label}</p>
+                  <p className={`text-xl font-black tabular-nums ${(m as { color?: string }).color ?? "text-zinc-900"}`}>{m.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 mt-4">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
+              <p className="text-xs text-zinc-400">{report.insight}</p>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -2,40 +2,31 @@
 
 import { useEffect, useState } from "react";
 import {
-  getCompanies, saveCompanies, getAdminInvoices, saveAdminInvoices,
+  getCompanies, saveCompanies, getAdminInvoices, saveAdminInvoices, addActivityLog,
   Company, companyStatus, PLANS, Plan, nextInvoiceId, formatDate,
 } from "@/app/_lib/store";
 
-function IssueCreditModal({
-  company,
-  onClose,
-  onIssued,
-}: {
-  company: Company;
-  onClose: () => void;
-  onIssued: (plan: Plan) => void;
-}) {
+function IssueCreditModal({ company, onClose, onIssued }: { company: Company; onClose: () => void; onIssued: (plan: Plan) => void }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xl font-bold text-gray-900">Issue credits</h2>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-xl">×</button>
+          <h2 className="text-base font-bold text-zinc-900">Issue credits</h2>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 text-xl">×</button>
         </div>
-        <p className="text-sm text-stone-400 mb-6">Adding credits to <span className="font-semibold text-gray-700">{company.name}</span>.</p>
-
-        <div className="flex flex-col gap-3">
+        <p className="text-sm text-zinc-500 mb-5">Issuing credits to <span className="font-semibold text-zinc-700">{company.name}</span>.</p>
+        <div className="flex flex-col gap-2.5">
           {PLANS.map((plan) => (
             <button
               key={plan.name}
               onClick={() => { onIssued(plan); onClose(); }}
-              className="flex items-center justify-between p-4 rounded-2xl border border-stone-200 hover:border-indigo-300 hover:bg-indigo-50/40 active:scale-[0.99] transition-all text-left"
+              className="flex items-center justify-between p-3.5 rounded-xl border border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/40 active:scale-[0.99] transition-all text-left"
             >
               <div>
-                <p className="text-sm font-bold text-gray-900">{plan.name}</p>
-                <p className="text-xs text-stone-400 mt-0.5">{plan.credits.toLocaleString()} credits · {plan.rollover} rollover</p>
+                <p className="text-sm font-bold text-zinc-900">{plan.name}</p>
+                <p className="text-xs text-zinc-400">{plan.credits.toLocaleString()} credits · {plan.rollover} rollover</p>
               </div>
-              <p className="text-lg font-black text-gray-900">{plan.priceStr}</p>
+              <p className="text-base font-black text-zinc-900">{plan.priceStr}</p>
             </button>
           ))}
         </div>
@@ -45,31 +36,33 @@ function IssueCreditModal({
 }
 
 export default function CreditsPage() {
-  const [companies, setCompanies]   = useState<Company[]>([]);
-  const [issueFor, setIssueFor]     = useState<Company | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [issueFor,  setIssueFor]  = useState<Company | null>(null);
+  const [toast,     setToast]     = useState<string | null>(null);
 
   useEffect(() => { setCompanies(getCompanies()); }, []);
 
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+
   const handleIssue = (plan: Plan) => {
     if (!issueFor) return;
-
-    const updated = companies.map((c) =>
-      c.id === issueFor.id ? { ...c, credits: c.credits + plan.credits, plan: plan.name } : c
-    );
+    const updated = companies.map((c) => c.id === issueFor.id ? { ...c, credits: c.credits + plan.credits, plan: plan.name, mrr: plan.price } : c);
     saveCompanies(updated);
     setCompanies(updated);
-
-    const adminInvs = getAdminInvoices();
+    const allInvs = getAdminInvoices();
     const newInv = {
-      id:      nextInvoiceId(adminInvs, "INV-A"),
+      id: nextInvoiceId(allInvs, "INV-A"),
       company: issueFor.name,
-      date:    formatDate(),
-      plan:    plan.name,
+      companyId: issueFor.id,
+      date: formatDate(),
+      plan: plan.name,
       credits: plan.credits,
-      amount:  plan.priceStr,
-      status:  "paid" as const,
+      amount: plan.priceStr,
+      status: "paid" as const,
     };
-    saveAdminInvoices([newInv, ...adminInvs]);
+    saveAdminInvoices([newInv, ...allInvs]);
+    addActivityLog({ type: "credit_issued", company: issueFor.name, companyId: issueFor.id, description: `${plan.credits.toLocaleString()} credits issued (${plan.name})`, amount: plan.priceStr });
+    showToast(`${plan.credits.toLocaleString()} credits added to ${issueFor.name}`);
   };
 
   const totalIssued    = companies.reduce((s, c) => s + c.credits, 0);
@@ -77,69 +70,83 @@ export default function CreditsPage() {
   const totalRemaining = totalIssued - totalConsumed;
 
   return (
-    <div className="max-w-4xl mx-auto px-8 py-10">
-      {issueFor && (
-        <IssueCreditModal company={issueFor} onClose={() => setIssueFor(null)} onIssued={handleIssue} />
+    <div className="max-w-4xl mx-auto px-8 py-8">
+      {issueFor && <IssueCreditModal company={issueFor} onClose={() => setIssueFor(null)} onIssued={handleIssue} />}
+
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
+          {toast}
+        </div>
       )}
 
-      <div className="mb-10">
-        <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-4">
-          Credits
-        </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Credit allocations</h1>
-        <p className="text-stone-400 mt-2 text-sm">Platform-wide credit issuance and consumption.</p>
+      <div className="mb-8">
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Admin</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Credits</h1>
+        <p className="text-sm text-zinc-400 mt-0.5">Platform-wide credit issuance and consumption.</p>
       </div>
 
-      {/* ── Totals ── */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-4 mb-6">
         {[
           { label: "Total issued",    value: totalIssued.toLocaleString()    },
           { label: "Total consumed",  value: totalConsumed.toLocaleString()  },
           { label: "Total remaining", value: totalRemaining.toLocaleString() },
         ].map((m) => (
-          <div key={m.label} className="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
-            <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mb-3">{m.label}</p>
-            <p className="text-3xl font-black text-gray-900 leading-none tabular-nums">{m.value}</p>
+          <div key={m.label} className="bg-white rounded-xl border border-zinc-200 p-5">
+            <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{m.label}</p>
+            <p className="text-3xl font-black text-zinc-900 tabular-nums">{m.value}</p>
           </div>
         ))}
       </div>
 
-      {/* ── Allocations table ── */}
-      <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-stone-100">
-              <th className="px-5 py-3 text-left text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Company</th>
-              <th className="px-5 py-3 text-left text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Plan</th>
-              <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Issued</th>
-              <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Used</th>
-              <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Remaining</th>
-              <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Action</th>
+            <tr className="border-b border-zinc-100 bg-zinc-50/60">
+              <th className="px-5 py-3 text-left text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Company</th>
+              <th className="px-5 py-3 text-left text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Plan</th>
+              <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Issued</th>
+              <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Used</th>
+              <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Remaining</th>
+              <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Status</th>
+              <th className="px-5 py-3" />
             </tr>
           </thead>
           <tbody>
             {companies.map((co, i) => {
-              const isDepleted = companyStatus(co) === "depleted";
+              const st         = companyStatus(co);
+              const remaining  = Math.max(co.credits - co.used, 0);
+              const pct        = Math.min(Math.round((co.used / co.credits) * 100), 100);
               return (
-                <tr key={co.id} className={`hover:bg-stone-50/60 transition-colors ${i < companies.length - 1 ? "border-b border-stone-100" : ""}`}>
+                <tr key={co.id} className={`hover:bg-zinc-50 transition-colors ${i < companies.length - 1 ? "border-b border-zinc-100" : ""}`}>
                   <td className="px-5 py-3.5">
-                    <p className="text-sm font-semibold text-gray-900">{co.name}</p>
-                    <p className="text-[11px] text-stone-400 mt-0.5">{co.joined}</p>
+                    <p className="text-sm font-semibold text-zinc-900">{co.name}</p>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">{co.joined}</p>
                   </td>
-                  <td className="px-5 py-3.5 text-sm text-stone-500">{co.plan}</td>
-                  <td className="px-5 py-3.5 text-sm font-semibold text-gray-900 text-right tabular-nums">{co.credits.toLocaleString()}</td>
-                  <td className="px-5 py-3.5 text-sm text-stone-500 text-right tabular-nums">{co.used.toLocaleString()}</td>
-                  <td className="px-5 py-3.5 text-right tabular-nums">
-                    <span className={`text-sm font-semibold ${isDepleted ? "text-red-500" : "text-gray-900"}`}>
-                      {Math.max(co.credits - co.used, 0).toLocaleString()}
-                    </span>
+                  <td className="px-5 py-3.5">
+                    <span className="text-xs font-semibold text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded">{co.plan}</span>
+                  </td>
+                  <td className="px-5 py-3.5 text-sm font-semibold text-zinc-900 text-right tabular-nums">{co.credits.toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-sm text-zinc-500 text-right tabular-nums">{co.used.toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-right">
+                    <p className={`text-sm font-semibold tabular-nums ${st === "depleted" ? "text-amber-500" : "text-zinc-900"}`}>
+                      {remaining.toLocaleString()}
+                    </p>
+                    <div className="w-16 h-1 bg-zinc-100 rounded-full mt-1 ml-auto">
+                      <div className={`h-1 rounded-full ${st === "depleted" ? "bg-amber-400" : "bg-indigo-400"}`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize ${
+                      st === "active" ? "bg-emerald-50 text-emerald-700" :
+                      st === "suspended" ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"
+                    }`}>{st}</span>
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <button
                       onClick={() => setIssueFor(co)}
                       className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
                     >
-                      Issue credits
+                      Issue
                     </button>
                   </td>
                 </tr>

@@ -1,65 +1,176 @@
 "use client";
 
-export default function AdminSettingsPage() {
-  return (
-    <div className="max-w-2xl mx-auto px-8 py-10">
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-      <div className="mb-10">
-        <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-4">
-          Settings
-        </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900">Platform settings</h1>
-        <p className="text-stone-400 mt-2 text-sm">Configure global platform defaults and admin preferences.</p>
+const SECTION = "px-6 py-5 border-b border-zinc-100 last:border-0";
+
+function Row({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-6 py-4 border-b border-zinc-50 last:border-0">
+      <div>
+        <p className="text-sm font-medium text-zinc-800">{label}</p>
+        {sub && <p className="text-xs text-zinc-400 mt-0.5">{sub}</p>}
+      </div>
+      <div className="flex-shrink-0">{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      className={`relative w-9 h-5 rounded-full transition-colors ${on ? "bg-indigo-500" : "bg-zinc-200"}`}
+    >
+      <span
+        className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${on ? "translate-x-[18px]" : "translate-x-0.5"}`}
+      />
+    </button>
+  );
+}
+
+export default function AdminSettingsPage() {
+  const router = useRouter();
+
+  const [saved, setSaved]                         = useState(false);
+  const [platformName, setPlatformName]           = useState("Credly");
+  const [supportEmail, setSupportEmail]           = useState("support@credly.io");
+  const [notifyNewCompany, setNotifyNewCompany]   = useState(true);
+  const [notifyLowCredits, setNotifyLowCredits]   = useState(true);
+  const [notifyInvoice, setNotifyInvoice]         = useState(false);
+  const [maintenanceMode, setMaintenanceMode]     = useState(false);
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleLogout = () => {
+    localStorage.clear();
+    router.replace("/");
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto px-8 py-8">
+
+      {showConfirmLogout && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setShowConfirmLogout(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-7" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-base font-bold text-zinc-900 mb-1">Sign out of admin?</h2>
+            <p className="text-sm text-zinc-500 mb-6">You'll be redirected to the login page.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowConfirmLogout(false)} className="flex-1 text-sm font-semibold text-zinc-600 border border-zinc-200 rounded-xl px-4 py-2.5 hover:bg-zinc-50 transition-colors">Cancel</button>
+              <button onClick={handleLogout} className="flex-1 text-sm font-semibold text-white bg-zinc-900 rounded-xl px-4 py-2.5 hover:bg-zinc-800 transition-colors">Sign out</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Admin</p>
+        <h1 className="text-2xl font-bold text-zinc-900">Settings</h1>
+        <p className="text-sm text-zinc-400 mt-0.5">Platform configuration and admin preferences.</p>
       </div>
 
-      {/* ── Credit defaults ── */}
-      <section className="mb-8">
-        <div className="mb-5">
-          <h2 className="text-base font-bold text-gray-900">Default credit plans</h2>
-          <p className="text-sm text-stone-400 mt-0.5">Credit packages available to client accounts.</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
-          {[
-            { name: "Starter", credits: 500,   price: "$49.00",  rollover: "7 days"  },
-            { name: "Growth",  credits: 2000,  price: "$149.00", rollover: "30 days" },
-            { name: "Scale",   credits: 10000, price: "$499.00", rollover: "90 days" },
-          ].map((plan, i, arr) => (
-            <div key={plan.name} className={`flex items-center justify-between px-5 py-4 ${i < arr.length - 1 ? "border-b border-stone-100" : ""}`}>
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{plan.name}</p>
-                <p className="text-xs text-stone-400 mt-0.5">{plan.credits.toLocaleString()} credits · {plan.rollover} rollover</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-gray-900">{plan.price}</span>
-                <button className="text-xs font-medium text-stone-400 hover:text-stone-700 border border-stone-200 px-2.5 py-1 rounded-lg transition-colors">
-                  Edit
-                </button>
-              </div>
+      {/* Platform */}
+      <div className="bg-white rounded-xl border border-zinc-200 mb-5 overflow-hidden">
+        <div className={SECTION}>
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">Platform</p>
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="text-xs font-semibold text-zinc-500 block mb-1.5">Platform name</label>
+              <input
+                value={platformName}
+                onChange={(e) => setPlatformName(e.target.value)}
+                className="w-full text-sm text-zinc-900 border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent"
+              />
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── Admin access ── */}
-      <section>
-        <div className="mb-5">
-          <h2 className="text-base font-bold text-gray-900">Admin access</h2>
-          <p className="text-sm text-stone-400 mt-0.5">Manage who can access the admin panel.</p>
-        </div>
-        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-12 flex flex-col items-center text-center">
-          <div className="w-10 h-10 rounded-xl bg-stone-100 flex items-center justify-center text-stone-400 mb-4">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
+            <div>
+              <label className="text-xs font-semibold text-zinc-500 block mb-1.5">Support email</label>
+              <input
+                value={supportEmail}
+                onChange={(e) => setSupportEmail(e.target.value)}
+                className="w-full text-sm text-zinc-900 border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-transparent"
+              />
+            </div>
           </div>
-          <p className="text-sm font-semibold text-gray-900 mb-1">Team access management coming soon</p>
-          <p className="text-sm text-stone-400 max-w-xs leading-relaxed">
-            Invite team members and assign admin roles here.
-          </p>
+          <div className="mt-5">
+            <button
+              onClick={handleSave}
+              className={`text-sm font-semibold px-4 py-2 rounded-lg transition-all ${
+                saved ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-zinc-900 text-white hover:bg-zinc-800"
+              }`}
+            >
+              {saved ? "Saved" : "Save changes"}
+            </button>
+          </div>
         </div>
-      </section>
+      </div>
+
+      {/* Notifications */}
+      <div className="bg-white rounded-xl border border-zinc-200 mb-5 overflow-hidden">
+        <div className={SECTION}>
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Notifications</p>
+        </div>
+        <div className="px-6 pb-2">
+          <Row label="New company signup" sub="Alert when a company creates an account">
+            <Toggle on={notifyNewCompany} onChange={setNotifyNewCompany} />
+          </Row>
+          <Row label="Low credit warning" sub="Alert when a company drops below 10% credits">
+            <Toggle on={notifyLowCredits} onChange={setNotifyLowCredits} />
+          </Row>
+          <Row label="Invoice events" sub="Alert on new invoices and overdue payments">
+            <Toggle on={notifyInvoice} onChange={setNotifyInvoice} />
+          </Row>
+        </div>
+      </div>
+
+      {/* System */}
+      <div className="bg-white rounded-xl border border-zinc-200 mb-5 overflow-hidden">
+        <div className={SECTION}>
+          <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">System</p>
+        </div>
+        <div className="px-6 pb-2">
+          <Row label="Maintenance mode" sub="Blocks client logins and shows a maintenance banner">
+            <Toggle on={maintenanceMode} onChange={setMaintenanceMode} />
+          </Row>
+          <Row label="Admin version" sub="Platform build">
+            <span className="text-xs font-mono text-zinc-400 bg-zinc-50 border border-zinc-100 px-2 py-1 rounded">v2.0.0</span>
+          </Row>
+        </div>
+      </div>
+
+      {/* Danger zone */}
+      <div className="bg-white rounded-xl border border-red-100 overflow-hidden">
+        <div className="px-6 py-4 border-b border-red-50">
+          <p className="text-xs font-semibold text-red-400 uppercase tracking-wider">Danger zone</p>
+        </div>
+        <div className="px-6 pb-4">
+          <Row label="Sign out" sub="End your current admin session">
+            <button
+              onClick={() => setShowConfirmLogout(true)}
+              className="text-xs font-semibold text-red-600 border border-red-200 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              Sign out
+            </button>
+          </Row>
+          <Row label="Reset platform data" sub="Wipe all localStorage — cannot be undone">
+            <button
+              onClick={() => {
+                if (confirm("Reset ALL platform data? This cannot be undone.")) {
+                  localStorage.clear();
+                  router.replace("/");
+                }
+              }}
+              className="text-xs font-semibold text-red-600 border border-red-200 bg-red-50 px-3 py-1.5 rounded-lg hover:bg-red-100 transition-colors"
+            >
+              Reset data
+            </button>
+          </Row>
+        </div>
+      </div>
 
     </div>
   );
