@@ -38,16 +38,16 @@ export default function UsagePage() {
   const historyMax = Math.max(...historyItems.map((h) => h.credits), 1);
 
   return (
-    <div className="max-w-2xl mx-auto px-8 py-10">
+    <div className="max-w-2xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10">
       {topUpOpen && <TopUpModal onClose={() => setTopUpOpen(false)} onSuccess={load} />}
 
       {/* ── Header ── */}
-      <div className="mb-10">
-        <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-4">
+      <div className="mb-7 md:mb-10">
+        <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-3">
           Usage
         </span>
-        <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 leading-snug">
-          Track how your credits<br />are being used.
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 leading-snug">
+          Track how your credits<br className="hidden sm:block" /> are being used.
         </h1>
         <p className="text-stone-400 mt-2 text-sm leading-relaxed">
           A live view of your credit consumption this month.
@@ -55,14 +55,14 @@ export default function UsagePage() {
       </div>
 
       {/* ── Credits this month ── */}
-      <section className="mb-10">
-        <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-6">
+      <section className="mb-8 md:mb-10">
+        <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-5 md:mb-6">
           Credits this month
         </p>
 
-        <div className="flex items-center gap-12">
+        <div className="flex flex-col sm:flex-row items-center gap-6 sm:gap-12">
           <div className="flex-shrink-0">
-            <svg viewBox="0 0 128 128" className="w-44 h-44" aria-label={`${creditsUsed} of ${creditsTotal} credits used`}>
+            <svg viewBox="0 0 128 128" className="w-36 h-36 sm:w-44 sm:h-44" aria-label={`${creditsUsed} of ${creditsTotal} credits used`}>
               <defs>
                 <linearGradient id="usage-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%"   stopColor="#6366f1" />
@@ -92,25 +92,33 @@ export default function UsagePage() {
             </svg>
           </div>
 
-          <div className="flex flex-col gap-5 flex-1">
-            <div>
-              <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Remaining</p>
-              <p className="text-4xl font-black text-gray-900 leading-none tabular-nums">{creditsRemaining.toLocaleString()}</p>
+          <div className="flex flex-col gap-4 sm:gap-5 w-full sm:flex-1">
+            <div className="flex items-center justify-between sm:block">
+              <div>
+                <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Remaining</p>
+                <p className="text-3xl sm:text-4xl font-black text-gray-900 leading-none tabular-nums">{creditsRemaining.toLocaleString()}</p>
+              </div>
+              <button
+                onClick={() => setTopUpOpen(true)}
+                className="sm:hidden text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-2 rounded-lg transition-colors"
+              >
+                Top up
+              </button>
             </div>
             <div className="h-px bg-stone-100" />
-            <div className="flex gap-8">
+            <div className="flex gap-6 sm:gap-8">
               <div>
                 <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Used</p>
-                <p className="text-2xl font-bold text-gray-900 tabular-nums">{creditsUsed}</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-900 tabular-nums">{creditsUsed}</p>
               </div>
               <div>
                 <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-widest mb-1">Total</p>
-                <p className="text-2xl font-bold text-stone-300 tabular-nums">{creditsTotal}</p>
+                <p className="text-xl sm:text-2xl font-bold text-stone-300 tabular-nums">{creditsTotal}</p>
               </div>
             </div>
             <button
               onClick={() => setTopUpOpen(true)}
-              className="self-start text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+              className="hidden sm:inline-flex self-start text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
             >
               Top up credits
             </button>
@@ -119,7 +127,7 @@ export default function UsagePage() {
       </section>
 
       {/* ── Breakdown by category ── */}
-      <section className="mb-10">
+      <section className="mb-8 md:mb-10">
         <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-5">
           Breakdown by category
         </p>

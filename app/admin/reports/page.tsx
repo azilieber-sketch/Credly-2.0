@@ -46,25 +46,25 @@ export default function AdminReportsPage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-8 py-8">
+    <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
-      <div className="mb-8">
+      <div className="mb-6 md:mb-8">
         <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Admin</p>
-        <h1 className="text-2xl font-bold text-zinc-900">Reports</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Reports</h1>
         <p className="text-sm text-zinc-400 mt-0.5">Monthly platform summaries across all companies.</p>
       </div>
 
       <div className="flex flex-col gap-4">
         {REPORTS.map((report) => (
-          <div key={report.id} className="bg-white rounded-xl border border-zinc-200 p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-zinc-900">{report.title}</h3>
+          <div key={report.id} className="bg-white rounded-xl border border-zinc-200 p-5 sm:p-6">
+            <div className="flex items-start justify-between mb-4 gap-3">
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-zinc-900">{report.title}</h3>
                 <p className="text-xs text-zinc-400 mt-0.5">Generated {report.date}</p>
               </div>
               <button
                 onClick={() => handleExport(report.id)}
-                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-all flex-shrink-0 ${
+                className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border transition-all flex-shrink-0 ${
                   downloaded === report.id
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : "text-zinc-500 border-zinc-200 hover:bg-zinc-50"
@@ -73,7 +73,7 @@ export default function AdminReportsPage() {
                 {downloaded === report.id ? (
                   <>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
-                    Downloaded
+                    <span className="hidden sm:inline">Downloaded</span>
                   </>
                 ) : (
                   <>
@@ -84,17 +84,18 @@ export default function AdminReportsPage() {
               </button>
             </div>
 
-            <div className="grid grid-cols-5 gap-4 py-4 border-t border-b border-zinc-100">
+            {/* Metrics grid — 2 cols on mobile, 5 on sm+ */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4 py-4 border-t border-b border-zinc-100">
               {[
                 { label: "Credits",         value: report.metrics.credits.toLocaleString()                  },
                 { label: "Active cos.",      value: report.metrics.companies.toString()                      },
                 { label: "Revenue",          value: `$${report.metrics.revenue.toLocaleString()}`            },
-                { label: "Resolution rate",  value: `${report.metrics.resolutionRate}%`, color: "text-emerald-600" },
+                { label: "Resolution",       value: `${report.metrics.resolutionRate}%`, color: "text-emerald-600" },
                 { label: "New signups",      value: report.metrics.newCompanies.toString()                   },
               ].map((m) => (
                 <div key={m.label}>
-                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">{m.label}</p>
-                  <p className={`text-xl font-black tabular-nums ${(m as { color?: string }).color ?? "text-zinc-900"}`}>{m.value}</p>
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">{m.label}</p>
+                  <p className={`text-lg sm:text-xl font-black tabular-nums ${(m as { color?: string }).color ?? "text-zinc-900"}`}>{m.value}</p>
                 </div>
               ))}
             </div>

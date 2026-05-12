@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Sidebar, { NavItem } from "@/app/_components/Sidebar";
 
 const NAV: NavItem[] = [
@@ -59,27 +59,23 @@ const NAV: NavItem[] = [
 ];
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  const [email, setEmail] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const router   = useRouter();
+  const pathname = usePathname();
+  const [email,   setEmail]   = useState<string | null>(null);
+  const [ready,   setReady]   = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem("isLoggedIn")) {
-      router.replace("/");
-      return;
-    }
-    if (localStorage.getItem("userRole") === "admin") {
-      router.replace("/admin");
-      return;
-    }
+    if (!localStorage.getItem("isLoggedIn")) { router.replace("/"); return; }
+    if (localStorage.getItem("userRole") === "admin") { router.replace("/admin"); return; }
     setEmail(localStorage.getItem("userEmail"));
     setReady(true);
   }, [router]);
 
+  useEffect(() => { setNavOpen(false); }, [pathname]);
+
   const logout = () => {
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userRole");
+    ["isLoggedIn", "userEmail", "userRole"].forEach((k) => localStorage.removeItem(k));
     router.push("/");
   };
 
@@ -93,8 +89,31 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="flex h-screen bg-stone-50 overflow-hidden">
-      <Sidebar navItems={NAV} email={email} onLogout={logout} />
-      <main className="flex-1 overflow-y-auto">{children}</main>
+      {/* Mobile top bar */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/95 backdrop-blur-sm border-b border-stone-200/60 z-30 flex items-center justify-between px-4 flex-shrink-0">
+        <span className="text-lg font-bold text-gray-900">Credly</span>
+        <button
+          onClick={() => setNavOpen(true)}
+          className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100 transition-colors"
+          aria-label="Open navigation"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12h18M3 6h18M3 18h12" />
+          </svg>
+        </button>
+      </header>
+
+      <Sidebar
+        navItems={NAV}
+        email={email}
+        onLogout={logout}
+        isOpen={navOpen}
+        onClose={() => setNavOpen(false)}
+      />
+
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0 min-w-0">
+        {children}
+      </main>
     </div>
   );
 }

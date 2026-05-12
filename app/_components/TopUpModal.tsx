@@ -32,13 +32,16 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center sm:p-4"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-8"
+        className="bg-white w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl shadow-2xl p-5 sm:p-8"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Drag handle (mobile) */}
+        <div className="sm:hidden w-10 h-1 bg-stone-200 rounded-full mx-auto mb-5" />
+
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Top up credits</h2>
@@ -46,7 +49,7 @@ export default function TopUpModal({ onClose, onSuccess }: TopUpModalProps) {
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-xl"
+            className="hidden sm:flex w-8 h-8 items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-xl"
           >
             ×
           </button>

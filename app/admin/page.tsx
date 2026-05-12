@@ -8,23 +8,21 @@ import {
   companyStatus, PLAN_MRR, timeAgo,
 } from "@/app/_lib/store";
 
-// ─── Sub-components ────────────────────────────────────────────────────────────
-
 const KPI = ({
   label, value, sub, trend, color = "text-zinc-900",
 }: {
   label: string; value: string; sub: string; trend?: string; color?: string;
 }) => (
-  <div className="bg-white rounded-xl border border-zinc-200 p-5">
-    <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-3">{label}</p>
-    <p className={`text-3xl font-black leading-none tabular-nums mb-1.5 ${color}`}>{value}</p>
+  <div className="bg-white rounded-xl border border-zinc-200 p-4 sm:p-5">
+    <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 sm:mb-3">{label}</p>
+    <p className={`text-2xl sm:text-3xl font-black leading-none tabular-nums mb-1.5 ${color}`}>{value}</p>
     <div className="flex items-center gap-1.5">
       {trend && (
         <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
           {trend}
         </span>
       )}
-      <p className="text-xs text-zinc-400">{sub}</p>
+      <p className="text-xs text-zinc-400 truncate">{sub}</p>
     </div>
   </div>
 );
@@ -48,12 +46,10 @@ const USAGE_MONTHS = [
   { label: "May", value: 4688, partial: true },
 ];
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function AdminOverview() {
-  const [companies, setCompanies]   = useState<Company[]>([]);
-  const [invoices, setInvoices]     = useState<AdminInvoice[]>([]);
-  const [activity, setActivity]     = useState<ActivityLog[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [invoices,  setInvoices]  = useState<AdminInvoice[]>([]);
+  const [activity,  setActivity]  = useState<ActivityLog[]>([]);
 
   useEffect(() => {
     setCompanies(getCompanies());
@@ -61,68 +57,68 @@ export default function AdminOverview() {
     setActivity(getActivityLogs());
   }, []);
 
-  const mrr          = companies.filter(c => c.status !== "suspended").reduce((s, c) => s + (PLAN_MRR[c.plan] ?? 0), 0);
-  const activeCount  = companies.filter(c => companyStatus(c) === "active").length;
-  const creditsMTD   = companies.reduce((s, c) => s + c.used, 0);
-  const pendingInvs  = invoices.filter(i => i.status === "pending").length;
-  const atRisk       = companies.filter(c => companyStatus(c) === "depleted" || c.status === "suspended");
-  const usageMax     = Math.max(...USAGE_MONTHS.map(m => m.value));
+  const mrr         = companies.filter(c => c.status !== "suspended").reduce((s, c) => s + (PLAN_MRR[c.plan] ?? 0), 0);
+  const activeCount = companies.filter(c => companyStatus(c) === "active").length;
+  const creditsMTD  = companies.reduce((s, c) => s + c.used, 0);
+  const pendingInvs = invoices.filter(i => i.status === "pending").length;
+  const atRisk      = companies.filter(c => companyStatus(c) === "depleted" || c.status === "suspended");
+  const usageMax    = Math.max(...USAGE_MONTHS.map(m => m.value));
 
   return (
-    <div className="max-w-5xl mx-auto px-8 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
       {/* ── Header ── */}
-      <div className="mb-8">
+      <div className="mb-6 md:mb-8">
         <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Credly Admin</p>
-        <h1 className="text-2xl font-bold text-zinc-900">Platform Overview</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Platform Overview</h1>
         <p className="text-sm text-zinc-400 mt-0.5">May 2026 · {companies.length} companies</p>
       </div>
 
       {/* ── KPI row ── */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
-        <KPI label="Monthly Revenue"    value={`$${mrr.toLocaleString()}`}   sub="Active accounts only"       trend="+12%" />
-        <KPI label="Active Companies"   value={activeCount.toString()}        sub={`of ${companies.length} total`}         />
-        <KPI label="Credits Consumed"   value={creditsMTD.toLocaleString()}   sub="Across all accounts"       trend="+8%"  />
-        <KPI label="Pending Invoices"   value={pendingInvs.toString()}        sub="Awaiting payment"
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 md:mb-8">
+        <KPI label="Monthly Revenue"  value={`$${mrr.toLocaleString()}`}  sub="Active accounts"          trend="+12%" />
+        <KPI label="Active Companies" value={activeCount.toString()}       sub={`of ${companies.length} total`}       />
+        <KPI label="Credits MTD"      value={creditsMTD.toLocaleString()}  sub="All accounts"             trend="+8%"  />
+        <KPI label="Pending Invoices" value={pendingInvs.toString()}       sub="Awaiting payment"
           color={pendingInvs > 0 ? "text-amber-500" : "text-zinc-900"} />
       </div>
 
-      {/* ── Credit usage chart + At-risk ── */}
-      <div className="grid grid-cols-3 gap-5 mb-6">
+      {/* ── Chart + Revenue by plan ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 mb-5">
 
         {/* Bar chart */}
-        <div className="col-span-2 bg-white rounded-xl border border-zinc-200 p-6">
-          <div className="flex items-center justify-between mb-5">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 p-5 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-5">
             <div>
               <p className="text-sm font-semibold text-zinc-900">Credit consumption</p>
               <p className="text-xs text-zinc-400 mt-0.5">Platform-wide, last 6 months</p>
             </div>
             <span className="text-xs font-semibold text-zinc-400">{creditsMTD.toLocaleString()} MTD</span>
           </div>
-          <div className="flex items-end gap-2 h-28">
+          <div className="flex items-end gap-1.5 sm:gap-2 h-24 sm:h-28">
             {USAGE_MONTHS.map((m) => {
               const pct = Math.round((m.value / usageMax) * 100);
               return (
                 <div key={m.label} className="flex flex-col items-center gap-1.5 flex-1">
-                  <span className="text-[10px] text-zinc-400 tabular-nums">{(m.value / 1000).toFixed(1)}k</span>
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400 tabular-nums hidden sm:block">{(m.value / 1000).toFixed(1)}k</span>
                   <div className="w-full flex flex-col justify-end" style={{ height: "72px" }}>
                     <div
                       className={`w-full rounded-t-md transition-all ${m.partial ? "bg-indigo-300" : "bg-indigo-500"}`}
                       style={{ height: `${pct}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-zinc-400">{m.label}</span>
+                  <span className="text-[9px] sm:text-[10px] text-zinc-400">{m.label}</span>
                 </div>
               );
             })}
           </div>
-          <p className="text-[10px] text-zinc-400 mt-3">May is a partial month</p>
+          <p className="text-[10px] text-zinc-400 mt-2 sm:mt-3">May is a partial month</p>
         </div>
 
         {/* Revenue by plan */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-6">
+        <div className="bg-white rounded-xl border border-zinc-200 p-5 sm:p-6">
           <p className="text-sm font-semibold text-zinc-900 mb-1">Revenue by plan</p>
-          <p className="text-xs text-zinc-400 mb-5">Active accounts</p>
+          <p className="text-xs text-zinc-400 mb-4 sm:mb-5">Active accounts</p>
           <div className="flex flex-col gap-4">
             {(["Scale", "Growth", "Starter"] as const).map((plan) => {
               const count   = companies.filter(c => c.plan === plan && c.status !== "suspended").length;
@@ -149,10 +145,10 @@ export default function AdminOverview() {
       </div>
 
       {/* ── Activity feed + At risk ── */}
-      <div className="grid grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
 
         {/* Recent activity */}
-        <div className="col-span-2 bg-white rounded-xl border border-zinc-200 overflow-hidden">
+        <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
             <p className="text-sm font-semibold text-zinc-900">Recent activity</p>
             <Link href="/admin/activity" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
@@ -163,15 +159,15 @@ export default function AdminOverview() {
             {activity.slice(0, 6).map((log) => {
               const cfg = ACTIVITY_CONFIG[log.type] ?? { label: "Event", dot: "bg-zinc-400", text: "text-zinc-600" };
               return (
-                <div key={log.id} className="flex items-center gap-3 px-5 py-3">
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${cfg.dot}`} />
+                <div key={log.id} className="flex items-start sm:items-center gap-3 px-5 py-3">
+                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 ${cfg.dot}`} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-zinc-700 truncate">{log.description}</p>
                     {log.company && (
                       <p className="text-xs text-zinc-400 mt-0.5">{log.company}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 flex-shrink-0">
                     {log.amount && <span className="text-xs font-semibold text-zinc-700">{log.amount}</span>}
                     <span className="text-xs text-zinc-400 whitespace-nowrap">{timeAgo(log.timestamp)}</span>
                   </div>

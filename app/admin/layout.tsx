@@ -86,8 +86,9 @@ const COMING_SOON = ["Integrations", "Agents", "Workflows"];
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
-  const [email, setEmail] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [email,   setEmail]   = useState<string | null>(null);
+  const [ready,   setReady]   = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem("isLoggedIn")) { router.replace("/"); return; }
@@ -95,6 +96,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setEmail(localStorage.getItem("userEmail"));
     setReady(true);
   }, [router]);
+
+  useEffect(() => { setNavOpen(false); }, [pathname]);
 
   const logout = () => {
     ["isLoggedIn", "userEmail", "userRole"].forEach((k) => localStorage.removeItem(k));
@@ -112,15 +115,60 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden">
 
-      {/* ── Dark sidebar ── */}
-      <aside className="w-56 bg-zinc-900 flex flex-col flex-shrink-0">
-
-        {/* Logo */}
-        <div className="px-4 h-[56px] flex items-center gap-2 border-b border-zinc-800">
-          <span className="text-white font-bold text-base tracking-tight">Credly</span>
+      {/* Mobile top bar */}
+      <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-zinc-900 z-30 flex items-center justify-between px-4 flex-shrink-0">
+        <div className="flex items-center gap-2">
+          <span className="text-white font-bold text-base">Credly</span>
           <span className="text-[9px] font-bold tracking-widest uppercase bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30">
             Admin
           </span>
+        </div>
+        <button
+          onClick={() => setNavOpen(true)}
+          className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 transition-colors"
+          aria-label="Open navigation"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 12h18M3 6h18M3 18h12" />
+          </svg>
+        </button>
+      </header>
+
+      {/* Backdrop */}
+      <div
+        aria-hidden="true"
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden transition-opacity duration-200 ${
+          navOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setNavOpen(false)}
+      />
+
+      {/* Sidebar */}
+      <aside
+        className={`
+          fixed inset-y-0 left-0 z-50
+          md:relative md:inset-auto md:z-auto
+          w-72 md:w-56 flex-shrink-0
+          bg-zinc-900 flex flex-col
+          transform transition-transform duration-200 ease-in-out
+          ${navOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
+        `}
+      >
+        {/* Logo */}
+        <div className="px-4 h-[56px] flex items-center justify-between border-b border-zinc-800 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-base tracking-tight">Credly</span>
+            <span className="text-[9px] font-bold tracking-widest uppercase bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30">
+              Admin
+            </span>
+          </div>
+          <button
+            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 text-xl leading-none transition-colors"
+            onClick={() => setNavOpen(false)}
+            aria-label="Close navigation"
+          >
+            ×
+          </button>
         </div>
 
         {/* Nav */}
@@ -138,7 +186,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                className={`flex items-center gap-2.5 px-2.5 py-3 md:py-2 rounded-lg text-[13px] font-medium transition-all ${
                   isActive
                     ? "bg-zinc-800 text-white"
                     : "text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200"
@@ -161,7 +209,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {COMING_SOON.map((label) => (
             <div
               key={label}
-              className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-zinc-700 cursor-default"
+              className="flex items-center gap-2.5 px-2.5 py-3 md:py-2 rounded-lg text-[13px] font-medium text-zinc-700 cursor-default"
             >
               <span className="w-3.5 h-3.5 rounded bg-zinc-800 flex-shrink-0" />
               {label}
@@ -170,13 +218,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         {/* Footer */}
-        <div className="px-2 py-3 border-t border-zinc-800">
+        <div className="px-2 py-3 border-t border-zinc-800 flex-shrink-0">
           {email && (
             <p className="text-[11px] text-zinc-600 px-2.5 mb-1.5 truncate">{email}</p>
           )}
           <button
             onClick={logout}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-all text-left"
+            className="w-full flex items-center gap-2.5 px-2.5 py-3 md:py-2 rounded-lg text-[13px] font-medium text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-all text-left"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
@@ -186,8 +234,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* ── Main content ── */}
-      <main className="flex-1 overflow-y-auto bg-zinc-50">
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto bg-zinc-50 pt-14 md:pt-0 min-w-0">
         {children}
       </main>
     </div>
