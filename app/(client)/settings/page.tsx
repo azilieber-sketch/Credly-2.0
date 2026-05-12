@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
-// ─── Components ───────────────────────────────────────────────────────────────
+import { useRouter } from "next/navigation";
+import TopUpModal from "@/app/_components/TopUpModal";
+import { getClient, saveClient, ClientData, DEFAULT_CLIENT, PLANS } from "@/app/_lib/store";
 
 const SectionHeader = ({ title, description }: { title: string; description: string }) => (
   <div className="mb-6">
@@ -11,67 +12,77 @@ const SectionHeader = ({ title, description }: { title: string; description: str
   </div>
 );
 
-const Toggle = ({ label, description, defaultOn = false }: { label: string; description: string; defaultOn?: boolean }) => {
-  const [on, setOn] = useState(defaultOn);
-  return (
-    <div className="flex items-center justify-between py-3.5 border-b border-stone-100 last:border-0">
-      <div>
-        <p className="text-sm font-medium text-gray-900">{label}</p>
-        <p className="text-xs text-stone-400 mt-0.5">{description}</p>
-      </div>
-      <button
-        onClick={() => setOn(!on)}
-        className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${on ? "bg-indigo-600" : "bg-stone-200"}`}
-        aria-checked={on}
-        role="switch"
-      >
-        <span
-          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${on ? "translate-x-4" : "translate-x-0.5"}`}
-        />
-      </button>
-    </div>
-  );
-};
-
-const IntegrationRow = ({
-  name,
-  description,
-  icon,
-}: {
-  name: string;
+interface ToggleProps {
+  label: string;
   description: string;
-  icon: React.ReactNode;
-}) => (
-  <div className="flex items-center justify-between py-4 border-b border-stone-100 last:border-0">
-    <div className="flex items-center gap-3">
-      <div className="w-8 h-8 rounded-lg bg-stone-100 flex items-center justify-center text-stone-600 flex-shrink-0">
-        {icon}
-      </div>
-      <div>
-        <p className="text-sm font-medium text-gray-900">{name}</p>
-        <p className="text-xs text-stone-400">{description}</p>
-      </div>
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}
+
+const Toggle = ({ label, description, checked, onChange }: ToggleProps) => (
+  <div className="flex items-center justify-between py-3.5 border-b border-stone-100 last:border-0">
+    <div>
+      <p className="text-sm font-medium text-gray-900">{label}</p>
+      <p className="text-xs text-stone-400 mt-0.5">{description}</p>
     </div>
-    <span className="text-[10px] font-semibold tracking-wider uppercase bg-stone-100 text-stone-400 px-2 py-1 rounded-md">
-      Coming soon
-    </span>
+    <button
+      onClick={() => onChange(!checked)}
+      className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${checked ? "bg-indigo-600" : "bg-stone-200"}`}
+      aria-checked={checked}
+      role="switch"
+    >
+      <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+    </button>
   </div>
 );
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function SettingsPage() {
-  const [name, setName]   = useState("");
-  const [email, setEmail] = useState("");
+  const router = useRouter();
+  const [client, setClient]       = useState<ClientData>(DEFAULT_CLIENT);
+  const [name, setName]           = useState("");
+  const [email, setEmail]         = useState("");
+  const [saved, setSaved]         = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
-  useEffect(() => {
-    const stored = localStorage.getItem("userEmail") ?? "";
-    setEmail(stored);
-    setName(stored.split("@")[0] ?? "");
-  }, []);
+  const load = () => {
+    const data = getClient();
+    setClient(data);
+    setEmail(localStorage.getItem("userEmail") ?? "");
+    setName(data.name || (localStorage.getItem("userEmail") ?? "").split("@")[0]);
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const saveProfile = () => {
+    const updated = { ...client, name };
+    saveClient(updated);
+    setClient(updated);
+    localStorage.setItem("userName", name);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const setNotification = (key: keyof ClientData["notifications"], value: boolean) => {
+    const updated = { ...client, notifications: { ...client.notifications, [key]: value } };
+    saveClient(updated);
+    setClient(updated);
+  };
+
+  const deleteAccount = () => {
+    localStorage.removeItem("credly_client");
+    localStorage.removeItem("credly_companies");
+    localStorage.removeItem("credly_admin_invoices");
+    localStorage.removeItem("isLoggedIn");
+    localStorage.removeItem("userEmail");
+    localStorage.removeItem("userName");
+    router.push("/");
+  };
+
+  const currentPlan = PLANS.find((p) => p.name === client.plan) ?? PLANS[1];
 
   return (
     <div className="max-w-2xl mx-auto px-8 py-10">
+      {topUpOpen && <TopUpModal onClose={() => setTopUpOpen(false)} onSuccess={load} />}
 
       {/* ── Header ── */}
       <div className="mb-10">
@@ -104,8 +115,12 @@ export default function SettingsPage() {
               className="border border-stone-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 bg-stone-50/80 cursor-not-allowed opacity-60"
             />
           </div>
-          <div className="flex justify-end pt-1">
-            <button className="text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all">
+          <div className="flex items-center justify-end gap-3 pt-1">
+            {saved && <p className="text-xs text-emerald-600 font-medium">Saved!</p>}
+            <button
+              onClick={saveProfile}
+              className="text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all"
+            >
               Save changes
             </button>
           </div>
@@ -118,10 +133,15 @@ export default function SettingsPage() {
         <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-gray-900">Growth</p>
-              <p className="text-xs text-stone-400 mt-0.5">2,000 credits · one-time purchase</p>
+              <p className="text-sm font-semibold text-gray-900">{currentPlan.name}</p>
+              <p className="text-xs text-stone-400 mt-0.5">
+                {client.creditsTotal.toLocaleString()} credits total · {currentPlan.priceStr} one-time
+              </p>
             </div>
-            <button className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors">
+            <button
+              onClick={() => setTopUpOpen(true)}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+            >
               Top up
             </button>
           </div>
@@ -132,9 +152,24 @@ export default function SettingsPage() {
       <section className="mb-10">
         <SectionHeader title="Notifications" description="Choose which emails you receive." />
         <div className="bg-white rounded-2xl border border-stone-100 shadow-sm px-6">
-          <Toggle label="Weekly usage report" description="A summary of your credit usage every Monday." defaultOn={true} />
-          <Toggle label="Low credit alert" description="Notify me when my balance drops below 10%." defaultOn={true} />
-          <Toggle label="Invoice issued" description="An email each time a new invoice is generated." defaultOn={false} />
+          <Toggle
+            label="Weekly usage report"
+            description="A summary of your credit usage every Monday."
+            checked={client.notifications.weeklyReport}
+            onChange={(v) => setNotification("weeklyReport", v)}
+          />
+          <Toggle
+            label="Low credit alert"
+            description="Notify me when my balance drops below 10%."
+            checked={client.notifications.lowCreditAlert}
+            onChange={(v) => setNotification("lowCreditAlert", v)}
+          />
+          <Toggle
+            label="Invoice issued"
+            description="An email each time a new invoice is generated."
+            checked={client.notifications.invoiceIssued}
+            onChange={(v) => setNotification("invoiceIssued", v)}
+          />
         </div>
       </section>
 
@@ -142,35 +177,21 @@ export default function SettingsPage() {
       <section className="mb-10">
         <SectionHeader title="Integrations" description="Connect your tools to enrich AI context." />
         <div className="bg-white rounded-2xl border border-stone-100 shadow-sm px-6">
-          <IntegrationRow
-            name="Shopify"
-            description="Sync order and customer data"
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <path d="M16 10a4 4 0 0 1-8 0" />
-              </svg>
-            }
-          />
-          <IntegrationRow
-            name="Zendesk"
-            description="Pull ticket history and macros"
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            }
-          />
-          <IntegrationRow
-            name="Gorgias"
-            description="Import helpdesk rules and tags"
-            icon={
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-              </svg>
-            }
-          />
+          {[
+            { name: "Shopify",  desc: "Sync order and customer data"    },
+            { name: "Zendesk",  desc: "Pull ticket history and macros"  },
+            { name: "Gorgias",  desc: "Import helpdesk rules and tags"  },
+          ].map((item, i, arr) => (
+            <div key={item.name} className={`flex items-center justify-between py-4 ${i < arr.length - 1 ? "border-b border-stone-100" : ""}`}>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                <p className="text-xs text-stone-400">{item.desc}</p>
+              </div>
+              <span className="text-[10px] font-semibold tracking-wider uppercase bg-stone-100 text-stone-400 px-2 py-1 rounded-md">
+                Coming soon
+              </span>
+            </div>
+          ))}
         </div>
       </section>
 
@@ -183,13 +204,15 @@ export default function SettingsPage() {
               <p className="text-sm font-semibold text-gray-900">Delete account</p>
               <p className="text-xs text-stone-400 mt-0.5">Permanently remove your account and all data.</p>
             </div>
-            <button className="text-xs font-semibold text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors">
+            <button
+              onClick={deleteAccount}
+              className="text-xs font-semibold text-red-600 border border-red-200 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+            >
               Delete account
             </button>
           </div>
         </div>
       </section>
-
     </div>
   );
 }

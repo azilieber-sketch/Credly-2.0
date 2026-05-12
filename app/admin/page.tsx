@@ -1,26 +1,28 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-
-// ─── Mock data ────────────────────────────────────────────────────────────────
-
-const PLATFORM_METRICS = [
-  { label: "Total companies",   value: "12",      sub: "+2 this month"     },
-  { label: "Credits issued",    value: "38,500",  sub: "All time"          },
-  { label: "Active this month", value: "8",       sub: "of 12 companies"   },
-  { label: "Revenue MTD",       value: "$1,792",  sub: "May 2026"          },
-];
-
-const COMPANIES = [
-  { name: "Lumina Apparel",   credits: 2000, used: 580, plan: "Growth",  status: "active"   },
-  { name: "Petal & Oak",      credits: 500,  used: 312, plan: "Starter", status: "active"   },
-  { name: "Dusk Goods Co.",   credits: 2000, used: 95,  plan: "Growth",  status: "active"   },
-  { name: "Reef Supply",      credits: 500,  used: 500, plan: "Starter", status: "depleted" },
-];
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
+import { getCompanies, Company, companyStatus } from "@/app/_lib/store";
 
 export default function AdminDashboard() {
+  const [companies, setCompanies] = useState<Company[]>([]);
+
+  useEffect(() => { setCompanies(getCompanies()); }, []);
+
+  const active    = companies.filter((c) => companyStatus(c) === "active").length;
+  const totalIssued    = companies.reduce((s, c) => s + c.credits, 0);
+  const revenueMap: Record<string, number> = { Starter: 49, Growth: 149, Scale: 499 };
+  const revenueMTD = companies.reduce((s, c) => s + (revenueMap[c.plan] ?? 0), 0);
+
+  const metrics = [
+    { label: "Total companies",   value: companies.length.toString(), sub: `+${Math.max(companies.length - 10, 0)} this month` },
+    { label: "Credits issued",    value: totalIssued.toLocaleString(), sub: "All time"                                          },
+    { label: "Active this month", value: active.toString(),            sub: `of ${companies.length} companies`                 },
+    { label: "Revenue MTD",       value: `$${revenueMTD.toLocaleString()}`, sub: "May 2026"                                    },
+  ];
+
+  const preview = companies.slice(0, 4);
+
   return (
     <div className="max-w-4xl mx-auto px-8 py-10">
 
@@ -37,7 +39,7 @@ export default function AdminDashboard() {
       <section className="mb-8">
         <p className="text-xs font-semibold text-stone-400 uppercase tracking-widest mb-4">Platform</p>
         <div className="grid grid-cols-4 gap-4">
-          {PLATFORM_METRICS.map((m) => (
+          {metrics.map((m) => (
             <div key={m.label} className="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
               <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mb-3">{m.label}</p>
               <p className="text-3xl font-black text-gray-900 leading-none tabular-nums mb-1">{m.value}</p>
@@ -68,14 +70,11 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {COMPANIES.map((co, i) => {
-                const pct = Math.round((co.used / co.credits) * 100);
-                const isDepleted = co.status === "depleted";
+              {preview.map((co, i) => {
+                const pct        = Math.min(Math.round((co.used / co.credits) * 100), 100);
+                const isDepleted = companyStatus(co) === "depleted";
                 return (
-                  <tr
-                    key={co.name}
-                    className={`hover:bg-stone-50/60 transition-colors ${i < COMPANIES.length - 1 ? "border-b border-stone-100" : ""}`}
-                  >
+                  <tr key={co.id} className={`hover:bg-stone-50/60 transition-colors ${i < preview.length - 1 ? "border-b border-stone-100" : ""}`}>
                     <td className="px-5 py-3.5 text-sm font-semibold text-gray-900">{co.name}</td>
                     <td className="px-5 py-3.5 text-sm text-stone-500">{co.plan}</td>
                     <td className="px-5 py-3.5 text-right">
@@ -84,10 +83,7 @@ export default function AdminDashboard() {
                           {co.used} <span className="text-stone-400 font-normal text-xs">/ {co.credits}</span>
                         </span>
                         <div className="w-16 h-1 bg-stone-100 rounded-full">
-                          <div
-                            className={`h-1 rounded-full ${isDepleted ? "bg-red-400" : "bg-indigo-400"}`}
-                            style={{ width: `${Math.min(pct, 100)}%` }}
-                          />
+                          <div className={`h-1 rounded-full ${isDepleted ? "bg-red-400" : "bg-indigo-400"}`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     </td>
@@ -112,7 +108,6 @@ export default function AdminDashboard() {
           </table>
         </div>
       </section>
-
     </div>
   );
 }

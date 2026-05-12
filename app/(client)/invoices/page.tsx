@@ -1,59 +1,42 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import TopUpModal from "@/app/_components/TopUpModal";
+import { getClient, ClientData, DEFAULT_CLIENT, Invoice } from "@/app/_lib/store";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+type StatusFilter = "all" | "paid" | "pending" | "overdue";
 
-type InvoiceStatus = "paid" | "pending" | "overdue";
-type Filter        = "all" | InvoiceStatus;
-
-interface Invoice {
-  id: string;
-  date: string;
-  period: string;
-  plan: string;
-  credits: number;
-  amount: string;
-  status: InvoiceStatus;
-}
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const INVOICES: Invoice[] = [
-  { id: "INV-0024", date: "May 1, 2026",  period: "May 2026",  plan: "Growth",  credits: 2000, amount: "$149.00", status: "paid"    },
-  { id: "INV-0023", date: "Apr 1, 2026",  period: "Apr 2026",  plan: "Starter", credits: 500,  amount: "$49.00",  status: "paid"    },
-  { id: "INV-0022", date: "Mar 1, 2026",  period: "Mar 2026",  plan: "Growth",  credits: 2000, amount: "$149.00", status: "paid"    },
-  { id: "INV-0021", date: "Feb 1, 2026",  period: "Feb 2026",  plan: "Growth",  credits: 2000, amount: "$149.00", status: "paid"    },
-  { id: "INV-0020", date: "Jan 3, 2026",  period: "Jan 2026",  plan: "Starter", credits: 500,  amount: "$49.00",  status: "paid"    },
-  { id: "INV-0019", date: "Dec 1, 2025",  period: "Dec 2025",  plan: "Growth",  credits: 2000, amount: "$149.00", status: "paid"    },
-];
-
-const STATUS_CONFIG: Record<InvoiceStatus, { text: string; dotColor: string; textColor: string }> = {
-  paid:    { text: "Paid",    dotColor: "bg-emerald-500", textColor: "text-emerald-600" },
-  pending: { text: "Pending", dotColor: "bg-amber-400",   textColor: "text-amber-600"   },
-  overdue: { text: "Overdue", dotColor: "bg-red-500",     textColor: "text-red-600"     },
+const STATUS_CONFIG: Record<"paid" | "pending" | "overdue", { text: string; dot: string; textColor: string }> = {
+  paid:    { text: "Paid",    dot: "bg-emerald-500", textColor: "text-emerald-600" },
+  pending: { text: "Pending", dot: "bg-amber-400",   textColor: "text-amber-600"   },
+  overdue: { text: "Overdue", dot: "bg-red-500",     textColor: "text-red-600"     },
 };
 
-const FILTERS: { id: Filter; label: string }[] = [
-  { id: "all",     label: "All" },
-  { id: "paid",    label: "Paid" },
+const FILTERS: { id: StatusFilter; label: string }[] = [
+  { id: "all",     label: "All"     },
+  { id: "paid",    label: "Paid"    },
   { id: "pending", label: "Pending" },
   { id: "overdue", label: "Overdue" },
 ];
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function InvoicesPage() {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [client, setClient]       = useState<ClientData>(DEFAULT_CLIENT);
+  const [filter, setFilter]       = useState<StatusFilter>("all");
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
-  const filtered = filter === "all" ? INVOICES : INVOICES.filter((inv) => inv.status === filter);
+  const load = () => setClient(getClient());
+  useEffect(() => { load(); }, []);
 
-  const totalPaid = INVOICES
+  const invoices: Invoice[] = client.invoices;
+  const filtered = filter === "all" ? invoices : invoices.filter((inv) => inv.status === filter);
+
+  const totalPaid = invoices
     .filter((inv) => inv.status === "paid")
     .reduce((sum, inv) => sum + parseFloat(inv.amount.replace("$", "")), 0);
 
   return (
     <div className="max-w-3xl mx-auto px-8 py-10">
+      {topUpOpen && <TopUpModal onClose={() => setTopUpOpen(false)} onSuccess={load} />}
 
       {/* ── Header ── */}
       <div className="flex items-start justify-between mb-10">
@@ -65,10 +48,13 @@ export default function InvoicesPage() {
             Billing history
           </h1>
           <p className="text-stone-400 mt-2 text-sm">
-            ${totalPaid.toFixed(2)} total paid · {INVOICES.filter(i => i.status === "paid").length} invoices
+            ${totalPaid.toFixed(2)} total paid · {invoices.filter((i) => i.status === "paid").length} invoices
           </p>
         </div>
-        <button className="mt-1 text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all shadow-sm shadow-indigo-200/60 flex-shrink-0">
+        <button
+          onClick={() => setTopUpOpen(true)}
+          className="mt-1 text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all shadow-sm shadow-indigo-200/60 flex-shrink-0"
+        >
           Buy credits
         </button>
       </div>
@@ -110,12 +96,9 @@ export default function InvoicesPage() {
             </thead>
             <tbody>
               {filtered.map((inv, i) => {
-                const status = STATUS_CONFIG[inv.status];
+                const st = STATUS_CONFIG[inv.status];
                 return (
-                  <tr
-                    key={inv.id}
-                    className={`hover:bg-stone-50/60 transition-colors ${i < filtered.length - 1 ? "border-b border-stone-100" : ""}`}
-                  >
+                  <tr key={inv.id} className={`hover:bg-stone-50/60 transition-colors ${i < filtered.length - 1 ? "border-b border-stone-100" : ""}`}>
                     <td className="px-5 py-3.5">
                       <span className="text-sm font-mono font-medium text-gray-900">{inv.id}</span>
                       <p className="text-[11px] text-stone-400 mt-0.5">{inv.date}</p>
@@ -129,9 +112,9 @@ export default function InvoicesPage() {
                       {inv.amount}
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${status.textColor}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${status.dotColor}`} />
-                        {status.text}
+                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${st.textColor}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
+                        {st.text}
                       </span>
                     </td>
                   </tr>
@@ -141,7 +124,6 @@ export default function InvoicesPage() {
           </table>
         )}
       </div>
-
     </div>
   );
 }

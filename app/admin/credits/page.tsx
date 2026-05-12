@@ -1,22 +1,86 @@
 "use client";
 
-const ALLOCATIONS = [
-  { company: "Lumina Apparel",   plan: "Growth",  credits: 2000,  used: 580,  date: "Jan 12, 2026", amount: "$149.00" },
-  { company: "Petal & Oak",      plan: "Starter", credits: 500,   used: 312,  date: "Feb 3, 2026",  amount: "$49.00"  },
-  { company: "Dusk Goods Co.",   plan: "Growth",  credits: 2000,  used: 95,   date: "Mar 18, 2026", amount: "$149.00" },
-  { company: "Reef Supply",      plan: "Starter", credits: 500,   used: 500,  date: "Nov 5, 2025",  amount: "$49.00"  },
-  { company: "Forma Studio",     plan: "Scale",   credits: 10000, used: 3201, date: "Oct 22, 2025", amount: "$499.00" },
-];
+import { useEffect, useState } from "react";
+import {
+  getCompanies, saveCompanies, getAdminInvoices, saveAdminInvoices,
+  Company, companyStatus, PLANS, Plan, nextInvoiceId, formatDate,
+} from "@/app/_lib/store";
 
-const TOTALS = {
-  issued:    ALLOCATIONS.reduce((s, a) => s + a.credits, 0),
-  consumed:  ALLOCATIONS.reduce((s, a) => s + a.used, 0),
-  remaining: ALLOCATIONS.reduce((s, a) => s + (a.credits - a.used), 0),
-};
+function IssueCreditModal({
+  company,
+  onClose,
+  onIssued,
+}: {
+  company: Company;
+  onClose: () => void;
+  onIssued: (plan: Plan) => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xl font-bold text-gray-900">Issue credits</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-xl">×</button>
+        </div>
+        <p className="text-sm text-stone-400 mb-6">Adding credits to <span className="font-semibold text-gray-700">{company.name}</span>.</p>
+
+        <div className="flex flex-col gap-3">
+          {PLANS.map((plan) => (
+            <button
+              key={plan.name}
+              onClick={() => { onIssued(plan); onClose(); }}
+              className="flex items-center justify-between p-4 rounded-2xl border border-stone-200 hover:border-indigo-300 hover:bg-indigo-50/40 active:scale-[0.99] transition-all text-left"
+            >
+              <div>
+                <p className="text-sm font-bold text-gray-900">{plan.name}</p>
+                <p className="text-xs text-stone-400 mt-0.5">{plan.credits.toLocaleString()} credits · {plan.rollover} rollover</p>
+              </div>
+              <p className="text-lg font-black text-gray-900">{plan.priceStr}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function CreditsPage() {
+  const [companies, setCompanies]   = useState<Company[]>([]);
+  const [issueFor, setIssueFor]     = useState<Company | null>(null);
+
+  useEffect(() => { setCompanies(getCompanies()); }, []);
+
+  const handleIssue = (plan: Plan) => {
+    if (!issueFor) return;
+
+    const updated = companies.map((c) =>
+      c.id === issueFor.id ? { ...c, credits: c.credits + plan.credits, plan: plan.name } : c
+    );
+    saveCompanies(updated);
+    setCompanies(updated);
+
+    const adminInvs = getAdminInvoices();
+    const newInv = {
+      id:      nextInvoiceId(adminInvs, "INV-A"),
+      company: issueFor.name,
+      date:    formatDate(),
+      plan:    plan.name,
+      credits: plan.credits,
+      amount:  plan.priceStr,
+      status:  "paid" as const,
+    };
+    saveAdminInvoices([newInv, ...adminInvs]);
+  };
+
+  const totalIssued    = companies.reduce((s, c) => s + c.credits, 0);
+  const totalConsumed  = companies.reduce((s, c) => s + c.used, 0);
+  const totalRemaining = totalIssued - totalConsumed;
+
   return (
     <div className="max-w-4xl mx-auto px-8 py-10">
+      {issueFor && (
+        <IssueCreditModal company={issueFor} onClose={() => setIssueFor(null)} onIssued={handleIssue} />
+      )}
 
       <div className="mb-10">
         <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-4">
@@ -29,9 +93,9 @@ export default function CreditsPage() {
       {/* ── Totals ── */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
-          { label: "Total issued",    value: TOTALS.issued.toLocaleString()    },
-          { label: "Total consumed",  value: TOTALS.consumed.toLocaleString()  },
-          { label: "Total remaining", value: TOTALS.remaining.toLocaleString() },
+          { label: "Total issued",    value: totalIssued.toLocaleString()    },
+          { label: "Total consumed",  value: totalConsumed.toLocaleString()  },
+          { label: "Total remaining", value: totalRemaining.toLocaleString() },
         ].map((m) => (
           <div key={m.label} className="bg-white rounded-2xl p-5 border border-stone-100 shadow-sm">
             <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mb-3">{m.label}</p>
@@ -50,27 +114,40 @@ export default function CreditsPage() {
               <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Issued</th>
               <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Used</th>
               <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Remaining</th>
-              <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Amount</th>
+              <th className="px-5 py-3 text-right text-[11px] font-semibold text-stone-400 uppercase tracking-wider">Action</th>
             </tr>
           </thead>
           <tbody>
-            {ALLOCATIONS.map((a, i) => (
-              <tr key={a.company} className={`hover:bg-stone-50/60 transition-colors ${i < ALLOCATIONS.length - 1 ? "border-b border-stone-100" : ""}`}>
-                <td className="px-5 py-3.5">
-                  <p className="text-sm font-semibold text-gray-900">{a.company}</p>
-                  <p className="text-[11px] text-stone-400 mt-0.5">{a.date}</p>
-                </td>
-                <td className="px-5 py-3.5 text-sm text-stone-500">{a.plan}</td>
-                <td className="px-5 py-3.5 text-sm font-semibold text-gray-900 text-right tabular-nums">{a.credits.toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-sm text-stone-500 text-right tabular-nums">{a.used.toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-sm text-stone-500 text-right tabular-nums">{(a.credits - a.used).toLocaleString()}</td>
-                <td className="px-5 py-3.5 text-sm font-semibold text-gray-900 text-right tabular-nums">{a.amount}</td>
-              </tr>
-            ))}
+            {companies.map((co, i) => {
+              const isDepleted = companyStatus(co) === "depleted";
+              return (
+                <tr key={co.id} className={`hover:bg-stone-50/60 transition-colors ${i < companies.length - 1 ? "border-b border-stone-100" : ""}`}>
+                  <td className="px-5 py-3.5">
+                    <p className="text-sm font-semibold text-gray-900">{co.name}</p>
+                    <p className="text-[11px] text-stone-400 mt-0.5">{co.joined}</p>
+                  </td>
+                  <td className="px-5 py-3.5 text-sm text-stone-500">{co.plan}</td>
+                  <td className="px-5 py-3.5 text-sm font-semibold text-gray-900 text-right tabular-nums">{co.credits.toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-sm text-stone-500 text-right tabular-nums">{co.used.toLocaleString()}</td>
+                  <td className="px-5 py-3.5 text-right tabular-nums">
+                    <span className={`text-sm font-semibold ${isDepleted ? "text-red-500" : "text-gray-900"}`}>
+                      {Math.max(co.credits - co.used, 0).toLocaleString()}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-right">
+                    <button
+                      onClick={() => setIssueFor(co)}
+                      className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg transition-colors"
+                    >
+                      Issue credits
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
-
     </div>
   );
 }
