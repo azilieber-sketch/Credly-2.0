@@ -2,42 +2,60 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import {
-  getCompanies, saveCompanies, addActivityLog,
-  Company, companyStatus, formatDate,
-} from "@/app/_lib/store";
+import { supabase } from "@/app/_lib/supabase";
 
-type StatusFilter = "all" | "active" | "depleted" | "suspended";
+interface SupabaseCompany {
+  id: string;
+  name: string;
+  email: string;
+  industry: string;
+  credits: number;
+  credits_used: number;
+  status: "active" | "suspended";
+  created_at: string;
+}
 
-const STATUS_BADGE: Record<string, string> = {
+type CompanyStatus = "active" | "depleted" | "suspended";
+type StatusFilter = "all" | CompanyStatus;
+
+function getStatus(co: SupabaseCompany): CompanyStatus {
+  if (co.status === "suspended") return "suspended";
+  if (co.credits_used >= co.credits) return "depleted";
+  return "active";
+}
+
+const STATUS_BADGE: Record<CompanyStatus, string> = {
   active:    "bg-emerald-50 text-emerald-700",
   depleted:  "bg-amber-50 text-amber-700",
   suspended: "bg-red-50 text-red-700",
 };
 
+const INDUSTRIES = ["E-commerce", "SaaS", "Retail", "Fashion", "Home & Garden", "Healthcare", "Finance", "Outdoors", "Design", "Other"];
+const CREDIT_OPTIONS = [500, 2000, 10000] as const;
+
 function AddCompanyModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
   const [name,     setName]     = useState("");
   const [email,    setEmail]    = useState("");
   const [industry, setIndustry] = useState("E-commerce");
+  const [credits,  setCredits]  = useState<500 | 2000 | 10000>(500);
+  const [error,    setError]    = useState<string | null>(null);
+  const [saving,   setSaving]   = useState(false);
 
-  const handle = () => {
+  const handle = async () => {
     if (!name.trim() || !email.trim()) return;
-    const companies = getCompanies();
-    const newCo: Company = {
-      id:       `co_${Date.now()}`,
-      name:     name.trim(),
-      email:    email.trim(),
-      plan:     "Starter",
-      credits:  500,
-      used:     0,
-      mrr:      49,
-      agents:   1,
-      industry: industry,
-      joined:   formatDate(),
-      status:   "active",
-    };
-    saveCompanies([newCo, ...companies]);
-    addActivityLog({ type: "company_added", company: newCo.name, companyId: newCo.id, description: `${newCo.name} joined on Starter plan` });
+    if (!supabase) return;
+    setSaving(true);
+    setError(null);
+    const { error: err } = await supabase.from("companies").insert({
+      name:         name.trim(),
+      email:        email.trim(),
+      industry,
+      credits,
+      credits_used: 0,
+      status:       "active",
+    });
+    setSaving(false);
+    if (err) { setError(err.message); return; }
     onAdded();
     onClose();
   };
@@ -68,16 +86,22 @@ function AddCompanyModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
             onChange={(e) => setIndustry(e.target.value)}
             className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
           >
-            {["E-commerce", "SaaS", "Retail", "Healthcare", "Finance", "Other"].map((i) => (
-              <option key={i}>{i}</option>
-            ))}
+            {INDUSTRIES.map((i) => <option key={i}>{i}</option>)}
           </select>
+          <select
+            value={credits}
+            onChange={(e) => setCredits(Number(e.target.value) as 500 | 2000 | 10000)}
+            className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+          >
+            {CREDIT_OPTIONS.map((c) => <option key={c} value={c}>{c.toLocaleString()} credits</option>)}
+          </select>
+          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
           <button
             onClick={handle}
-            disabled={!name.trim() || !email.trim()}
+            disabled={!name.trim() || !email.trim() || saving}
             className="w-full mt-1 text-sm font-semibold bg-zinc-900 text-white py-3 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-40"
           >
-            Add company
+            {saving ? "Adding…" : "Add company"}
           </button>
         </div>
       </div>
@@ -86,16 +110,35 @@ function AddCompanyModal({ onClose, onAdded }: { onClose: () => void; onAdded: (
 }
 
 export default function AdminCompaniesPage() {
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [companies, setCompanies] = useState<SupabaseCompany[]>([]);
   const [search,    setSearch]    = useState("");
   const [filter,    setFilter]    = useState<StatusFilter>("all");
   const [showAdd,   setShowAdd]   = useState(false);
+  const [loading,   setLoading]   = useState(true);
 
-  const load = () => setCompanies(getCompanies());
+  const load = async () => {
+    if (!supabase) { setLoading(false); return; }
+    setLoading(true);
+    const { data } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
+    if (data) setCompanies(data as SupabaseCompany[]);
+    setLoading(false);
+  };
+
   useEffect(() => { load(); }, []);
 
+  if (!supabase) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
+        <div className="bg-white rounded-xl border border-zinc-200 p-6">
+          <p className="text-sm font-semibold text-zinc-900 mb-1">Supabase not configured</p>
+          <p className="text-sm text-zinc-400">Add your Supabase environment variables to enable company management.</p>
+        </div>
+      </div>
+    );
+  }
+
   const visible = companies
-    .filter((c) => filter === "all" || companyStatus(c) === filter)
+    .filter((c) => filter === "all" || getStatus(c) === filter)
     .filter((c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -117,7 +160,6 @@ export default function AdminCompaniesPage() {
         </button>
       </div>
 
-      {/* Search + filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-5">
         <div className="relative flex-1">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -146,11 +188,14 @@ export default function AdminCompaniesPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-        {visible.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : visible.length === 0 ? (
           <div className="py-16 text-center text-sm text-zinc-400">No companies found.</div>
         ) : (
           <>
-            {/* Desktop table */}
             <table className="w-full hidden sm:table">
               <thead>
                 <tr className="border-b border-zinc-100 bg-zinc-50/60">
@@ -164,7 +209,7 @@ export default function AdminCompaniesPage() {
               </thead>
               <tbody>
                 {visible.map((co, i) => {
-                  const st = companyStatus(co);
+                  const st = getStatus(co);
                   return (
                     <tr
                       key={co.id}
@@ -177,7 +222,7 @@ export default function AdminCompaniesPage() {
                       </td>
                       <td className="px-5 py-3.5 text-sm text-zinc-500">{co.industry}</td>
                       <td className="px-5 py-3.5 text-sm font-semibold text-zinc-900 text-right tabular-nums">{co.credits.toLocaleString()}</td>
-                      <td className="px-5 py-3.5 text-sm text-zinc-500 text-right tabular-nums">{co.used.toLocaleString()}</td>
+                      <td className="px-5 py-3.5 text-sm text-zinc-500 text-right tabular-nums">{co.credits_used.toLocaleString()}</td>
                       <td className="px-5 py-3.5 text-right">
                         <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize ${STATUS_BADGE[st]}`}>
                           {st}
@@ -198,11 +243,10 @@ export default function AdminCompaniesPage() {
               </tbody>
             </table>
 
-            {/* Mobile cards */}
             <div className="sm:hidden divide-y divide-zinc-100">
               {visible.map((co) => {
-                const st = companyStatus(co);
-                const remaining = Math.max(co.credits - co.used, 0);
+                const st = getStatus(co);
+                const remaining = Math.max(co.credits - co.credits_used, 0);
                 return (
                   <Link key={co.id} href={`/admin/companies/${co.id}`} className="block px-4 py-4 hover:bg-zinc-50 transition-colors active:bg-zinc-100">
                     <div className="flex items-start justify-between mb-3">
@@ -216,12 +260,12 @@ export default function AdminCompaniesPage() {
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Plan</p>
-                        <p className="text-sm font-medium text-zinc-700">{co.plan}</p>
+                        <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Credits</p>
+                        <p className="text-sm font-medium text-zinc-700">{co.credits.toLocaleString()}</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Used</p>
-                        <p className="text-sm font-medium text-zinc-700">{co.used.toLocaleString()}</p>
+                        <p className="text-sm font-medium text-zinc-700">{co.credits_used.toLocaleString()}</p>
                       </div>
                       <div>
                         <p className="text-[10px] text-zinc-400 uppercase tracking-wider mb-0.5">Remaining</p>
