@@ -87,17 +87,24 @@ export default function TicketsPage() {
     }
 
     const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL?.trim();
+    console.log("[tickets] webhookUrl raw:", JSON.stringify(webhookUrl));
+    console.log("[tickets] payload:", JSON.stringify(data));
     if (webhookUrl) {
       try {
         new URL(webhookUrl);
+        console.log("[tickets] URL valid — calling fetch...");
         fetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
-        }).catch(() => {});
-      } catch {
-        // invalid or empty URL — skip webhook silently
+        })
+          .then(() => console.log("[tickets] webhook ok"))
+          .catch((err: unknown) => console.error("[tickets] webhook promise rejected:", err));
+      } catch (err) {
+        console.error("[tickets] caught synchronous error:", err);
       }
+    } else {
+      console.log("[tickets] webhookUrl empty/missing — skipping fetch");
     }
 
     setTickets((prev) => [data as Ticket, ...prev]);
