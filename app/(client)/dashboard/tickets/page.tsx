@@ -70,15 +70,18 @@ export default function TicketsPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("[tickets] submit fired, supabase:", supabase ? "ready" : "null");
     if (!supabase) return;
     setSubmitting(true);
     setError(null);
 
+    console.log("[tickets] calling supabase insert...");
     const { data, error: dbError } = await supabase
       .from("tickets")
       .insert([form])
       .select()
       .single();
+    console.log("[tickets] insert result — data:", data, "error:", dbError);
 
     if (dbError) {
       setError(dbError.message);
