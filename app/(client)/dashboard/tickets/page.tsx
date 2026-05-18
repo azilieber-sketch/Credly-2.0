@@ -19,15 +19,15 @@ interface Ticket {
 }
 
 const STATUS_CONFIG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
-  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",    dot: "bg-amber-400"   },
-  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",  dot: "bg-indigo-400"  },
+  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
+  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-400"  },
   resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
 };
 
 const PRIORITY_CONFIG: Record<Priority, { label: string; badge: string }> = {
-  low:    { label: "Low",    badge: "bg-stone-50 text-stone-500"  },
-  medium: { label: "Medium", badge: "bg-amber-50 text-amber-600"  },
-  high:   { label: "High",   badge: "bg-red-50 text-red-600"      },
+  low:    { label: "Low",    badge: "bg-stone-50 text-stone-500" },
+  medium: { label: "Medium", badge: "bg-amber-50 text-amber-600" },
+  high:   { label: "High",   badge: "bg-red-50 text-red-600"     },
 };
 
 const EMPTY_FORM = {
@@ -57,6 +57,7 @@ export default function TicketsPage() {
   const [loading,    setLoading]    = useState(true);
 
   const load = async () => {
+    if (!supabase) { setLoading(false); return; }
     const { data } = await supabase
       .from("tickets")
       .select("*")
@@ -69,6 +70,7 @@ export default function TicketsPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!supabase) return;
     setSubmitting(true);
     setError(null);
 
@@ -101,6 +103,29 @@ export default function TicketsPage() {
   };
 
   const filtered = filter === "all" ? tickets : tickets.filter((t) => t.status === filter);
+
+  if (!supabase) {
+    return (
+      <div className="max-w-3xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10">
+        <div className="mb-7 md:mb-10">
+          <span className="inline-block text-amber-700 font-semibold text-xs uppercase tracking-widest bg-amber-50 border border-amber-100 px-3 py-1 rounded-full mb-3">
+            Support
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-gray-900 leading-snug">
+            Support Tickets
+          </h1>
+        </div>
+        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-6">
+          <p className="text-sm font-semibold text-gray-900 mb-2">Configuration required</p>
+          <p className="text-sm text-stone-500">
+            Add <code className="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+            <code className="bg-stone-100 px-1.5 py-0.5 rounded text-xs font-mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to
+            your Vercel environment variables, then redeploy.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10">
