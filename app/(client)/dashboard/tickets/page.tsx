@@ -86,13 +86,18 @@ export default function TicketsPage() {
       return;
     }
 
-    const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL;
+    const webhookUrl = process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL?.trim();
     if (webhookUrl) {
-      fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-      }).catch(() => {});
+      try {
+        new URL(webhookUrl);
+        fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }).catch(() => {});
+      } catch {
+        // invalid or empty URL — skip webhook silently
+      }
     }
 
     setTickets((prev) => [data as Ticket, ...prev]);
