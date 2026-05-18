@@ -156,7 +156,9 @@ export default function CompanyDetailPage() {
     if (!supabase) { setLoading(false); return; }
     setLoading(true);
 
-    const { data: coData } = await supabase.from("companies").select("*").eq("id", id).single();
+    const { data: coData, error: coError } = await supabase.from("companies").select("*").eq("id", id).single();
+    console.log("[company] id from URL:", id);
+    console.log("[company] query result — data:", coData, "error:", coError);
     if (!coData) { setNotFound(true); setLoading(false); return; }
     setCompany(coData as SupabaseCompany);
     setNotFound(false);
