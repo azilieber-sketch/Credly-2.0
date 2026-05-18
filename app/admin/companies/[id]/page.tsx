@@ -153,6 +153,7 @@ export default function CompanyDetailPage() {
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   const load = useCallback(async () => {
+    console.log("[load] called — supabase:", supabase ? "ready" : "NULL", "| id:", id);
     if (!supabase) { setLoading(false); return; }
     setLoading(true);
 
