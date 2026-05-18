@@ -161,7 +161,9 @@ export default function CompanyDetailPage() {
     setCompany(coData as SupabaseCompany);
     setNotFound(false);
 
-    const { data: ticketData } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
+    const { data: ticketData, error: ticketError } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
+    console.log("[tickets] company id used in query:", id);
+    console.log("[tickets] query result — data:", ticketData, "error:", ticketError);
     if (ticketData) setTickets(ticketData as Ticket[]);
 
     const allInvs = getAdminInvoices();
