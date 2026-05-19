@@ -165,8 +165,18 @@ export default function CompanyDetailPage() {
     setCompany(coData as SupabaseCompany);
     setNotFound(false);
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const role = session ? `authenticated (uid: ${session.user.id})` : "anon (no session)";
+
+    const { data: allTickets, error: allError } = await supabase.from("tickets").select("id, company_id").limit(5);
     const { data: ticketData, error: ticketError } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
-    setDebugMsg(`company_id queried: ${id} | tickets returned: ${ticketData?.length ?? "null"} | error: ${ticketError?.message ?? "none"}`);
+
+    setDebugMsg(
+      `role: ${role} | ` +
+      `all tickets (no filter, limit 5): ${JSON.stringify(allTickets)} | ` +
+      `filtered by company_id=${id}: returned ${ticketData?.length ?? "null"} | ` +
+      `error: ${ticketError?.message ?? "none"}`
+    );
     if (ticketData) setTickets(ticketData as Ticket[]);
 
     const allInvs = getAdminInvoices();
