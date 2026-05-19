@@ -149,24 +149,24 @@ export default function CompanyDetailPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText,      setReplyText]      = useState("");
   const [suggesting,     setSuggesting]     = useState(false);
+  const [debugMsg,       setDebugMsg]       = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   const load = useCallback(async () => {
-    console.log("[load] called — supabase:", supabase ? "ready" : "NULL", "| id:", id);
-    if (!supabase) { setLoading(false); return; }
+    if (!supabase) { setDebugMsg("❌ Supabase client is null — env vars missing from build"); setLoading(false); return; }
     setLoading(true);
 
     const { data: coData, error: coError } = await supabase.from("companies").select("*").eq("id", id).single();
-    console.log("[company] id from URL:", id);
-    console.log("[company] query result — data:", coData, "error:", coError);
-    if (!coData) { setNotFound(true); setLoading(false); return; }
+    if (!coData) {
+      setDebugMsg(`❌ Company not found — id: ${id} | error: ${coError?.message ?? "unknown"}`);
+      setNotFound(true); setLoading(false); return;
+    }
     setCompany(coData as SupabaseCompany);
     setNotFound(false);
 
     const { data: ticketData, error: ticketError } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
-    console.log("[tickets] company id used in query:", id);
-    console.log("[tickets] query result — data:", ticketData, "error:", ticketError);
+    setDebugMsg(`company_id queried: ${id} | tickets returned: ${ticketData?.length ?? "null"} | error: ${ticketError?.message ?? "none"}`);
     if (ticketData) setTickets(ticketData as Ticket[]);
 
     const allInvs = getAdminInvoices();
@@ -426,6 +426,12 @@ export default function CompanyDetailPage() {
         <span>/</span>
         <span className="text-zinc-700 font-medium truncate">{company.name}</span>
       </div>
+
+      {debugMsg && (
+        <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-mono text-amber-800 break-all">
+          {debugMsg}
+        </div>
+      )}
 
       {/* Header */}
       <div className="mb-6 md:mb-8">
