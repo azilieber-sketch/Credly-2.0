@@ -26,6 +26,16 @@ const NAV = [
     ),
   },
   {
+    href: "/admin/integrations",
+    label: "Integrations",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/usage",
     label: "Usage",
     icon: (
@@ -82,7 +92,7 @@ const NAV = [
   },
 ];
 
-const COMING_SOON = ["Integrations", "Agents", "Workflows"];
+const COMING_SOON = ["Agents", "Workflows"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
