@@ -99,31 +99,32 @@ export default function TicketsPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const userEmail = session?.user?.email;
-    if (!userEmail) { setNoEmail(true); setLoading(false); return; }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const userEmail = session?.user?.email;
+      if (!userEmail) { setNoEmail(true); setLoading(false); return; }
 
-    supabase
-      .from("companies")
-      .select("id, name")
-      .eq("email", userEmail)
-      .single()
-      .then(({ data: company }) => {
-        if (!company) {
-          setNoAccount(userEmail);
-          setLoading(false);
-          return;
-        }
-        supabase!
-          .from("tickets")
-          .select("*")
-          .eq("company_id", company.id)
-          .order("created_at", { ascending: false })
-          .then(({ data }) => {
-            if (data) setTickets(data as Ticket[]);
+      supabase!
+        .from("companies")
+        .select("id, name")
+        .eq("email", userEmail)
+        .single()
+        .then(({ data: company }) => {
+          if (!company) {
+            setNoAccount(userEmail);
             setLoading(false);
-          });
-      });
+            return;
+          }
+          supabase!
+            .from("tickets")
+            .select("*")
+            .eq("company_id", company.id)
+            .order("created_at", { ascending: false })
+            .then(({ data }) => {
+              if (data) setTickets(data as Ticket[]);
+              setLoading(false);
+            });
+        });
+    });
   }, []);
 
   if (!supabase) return <NotConfigured />;
