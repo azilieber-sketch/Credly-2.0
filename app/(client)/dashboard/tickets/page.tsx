@@ -19,6 +19,7 @@ interface Ticket {
   created_at: string;
   reply: string | null;
   replied_at: string | null;
+  source: string | null;
 }
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -51,6 +52,18 @@ const FILTERS: { id: StatusFilter; label: string }[] = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function sourceBadge(source: string | null): string {
+  const map: Record<string, string> = {
+    gmail:     "bg-indigo-50 text-indigo-600",
+    instagram: "bg-pink-50 text-pink-600",
+    shopify:   "bg-emerald-50 text-emerald-700",
+    slack:     "bg-violet-50 text-violet-600",
+    hubspot:   "bg-orange-50 text-orange-600",
+    web:       "bg-stone-100 text-stone-500",
+  };
+  return map[(source ?? "web").toLowerCase()] ?? "bg-stone-100 text-stone-500";
+}
 
 function timeAgo(iso: string): string {
   const diff  = Date.now() - new Date(iso).getTime();
@@ -187,6 +200,11 @@ export default function TicketsPage() {
               <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${PRIORITY_BADGE[selected.priority]}`}>
                 {selected.priority}
               </span>
+              {selected.source && (
+                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${sourceBadge(selected.source)}`}>
+                  {selected.source}
+                </span>
+              )}
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${st.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                 {st.label}
@@ -316,6 +334,11 @@ export default function TicketsPage() {
                       <span className="text-[11px] font-medium text-stone-400 bg-stone-50 px-2 py-0.5 rounded capitalize">
                         {ticket.issue_category}
                       </span>
+                      {ticket.source && (
+                        <span className={`text-[11px] font-medium capitalize px-2 py-0.5 rounded ${sourceBadge(ticket.source)}`}>
+                          {ticket.source}
+                        </span>
+                      )}
                       <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.badge}`}>
                         <span className={`w-1 h-1 rounded-full flex-shrink-0 ${st.dot}`} />
                         {st.label}

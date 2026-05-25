@@ -46,7 +46,21 @@ interface Ticket {
   created_at: string;
   reply: string | null;
   replied_at: string | null;
+  source: string | null;
 }
+
+interface Integration {
+  company_id: string;
+  channel: string;
+  status: "connected" | "disconnected";
+}
+
+const INT_CHANNELS = ["gmail", "slack", "hubspot", "instagram"] as const;
+type IntChannel = typeof INT_CHANNELS[number];
+
+const INT_CHANNEL_LABEL: Record<IntChannel, string> = {
+  gmail: "Gmail", slack: "Slack", hubspot: "HubSpot", instagram: "Instagram",
+};
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -84,6 +98,18 @@ const TICKET_FILTERS: { id: TicketFilter; label: string }[] = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
+
+function sourceBadge(source: string | null): string {
+  const map: Record<string, string> = {
+    gmail:     "bg-indigo-50 text-indigo-600",
+    instagram: "bg-pink-50 text-pink-600",
+    shopify:   "bg-emerald-50 text-emerald-700",
+    slack:     "bg-violet-50 text-violet-600",
+    hubspot:   "bg-orange-50 text-orange-600",
+    web:       "bg-zinc-100 text-zinc-500",
+  };
+  return map[(source ?? "web").toLowerCase()] ?? "bg-zinc-100 text-zinc-500";
+}
 
 function planPrice(credits: number): string {
   if (credits >= 10000) return "$499/mo";
@@ -149,6 +175,7 @@ export default function CompanyDetailPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText,      setReplyText]      = useState("");
   const [suggesting,     setSuggesting]     = useState(false);
+  const [integrations,   setIntegrations]   = useState<Integration[]>([]);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
@@ -165,6 +192,9 @@ export default function CompanyDetailPage() {
 
     const { data: ticketData } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
     if (ticketData) setTickets(ticketData as Ticket[]);
+
+    const { data: intData } = await supabase.from("integrations").select("company_id, channel, status").eq("company_id", id);
+    if (intData) setIntegrations(intData as Integration[]);
 
     const allInvs = getAdminInvoices();
     setInvoices(allInvs.filter((inv) => inv.companyId === id || inv.company === (coData as SupabaseCompany).name));
@@ -318,6 +348,11 @@ export default function CompanyDetailPage() {
               }`}>
                 {selectedTicket.priority}
               </span>
+              {selectedTicket.source && (
+                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${sourceBadge(selectedTicket.source)}`}>
+                  {selectedTicket.source}
+                </span>
+              )}
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${st.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                 {st.label}
@@ -576,6 +611,31 @@ export default function CompanyDetailPage() {
         </div>
       </div>
 
+      {/* Integrations */}
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
+        <div className="px-5 py-4 border-b border-zinc-100">
+          <p className="text-sm font-semibold text-zinc-900">Integrations</p>
+        </div>
+        <div className="px-5 py-4 flex flex-wrap gap-2">
+          {INT_CHANNELS.map((ch) => {
+            const connected = integrations.some((i) => i.channel === ch && i.status === "connected");
+            return (
+              <span
+                key={ch}
+                className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+                  connected
+                    ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                    : "bg-zinc-50 text-zinc-400 border border-zinc-100"
+                }`}
+              >
+                {connected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
+                {INT_CHANNEL_LABEL[ch]}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Support Tickets */}
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
@@ -637,6 +697,11 @@ export default function CompanyDetailPage() {
                       <span className="text-[11px] font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded capitalize">
                         {ticket.issue_category}
                       </span>
+                      {ticket.source && (
+                        <span className={`text-[11px] font-medium capitalize px-2 py-0.5 rounded ${sourceBadge(ticket.source)}`}>
+                          {ticket.source}
+                        </span>
+                      )}
                       <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${tst.badge}`}>
                         <span className={`w-1 h-1 rounded-full flex-shrink-0 ${tst.dot}`} />
                         {tst.label}
