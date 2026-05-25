@@ -5,6 +5,7 @@ export const SOURCE_COLORS: Record<string, string> = {
   instagram: "#E1306C",
   shopify:   "#5C6AC4",
   slack:     "#4A154B",
+  hubspot:   "#FF7A59",
   unknown:   "#9ca3af",
 };
 
@@ -13,6 +14,7 @@ export const SOURCE_LABELS: Record<string, string> = {
   instagram: "Instagram",
   shopify:   "Shopify",
   slack:     "Slack",
+  hubspot:   "HubSpot",
   unknown:   "Unknown",
 };
 
@@ -57,6 +59,21 @@ function SlackSvg({ size }: { size: number }) {
   );
 }
 
+function HubSpotSvg({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#FFF0EB" stroke="#FF7A59" strokeWidth="1.5"/>
+      <circle cx="12" cy="12" r="2.5" fill="#FF7A59"/>
+      <circle cx="12" cy="5.5" r="1.4" fill="#FF7A59" opacity="0.75"/>
+      <circle cx="18" cy="15.5" r="1.4" fill="#FF7A59" opacity="0.75"/>
+      <circle cx="6"  cy="15.5" r="1.4" fill="#FF7A59" opacity="0.75"/>
+      <line x1="12" y1="6.9"  x2="12"  y2="9.5"  stroke="#FF7A59" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="17" y1="14.4" x2="14.2" y2="12.8" stroke="#FF7A59" strokeWidth="1.2" strokeLinecap="round"/>
+      <line x1="7"  y1="14.4" x2="9.8"  y2="12.8" stroke="#FF7A59" strokeWidth="1.2" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
 function UnknownSvg({ size }: { size: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -73,6 +90,7 @@ export function SourceIconRaw({ source, size = 18 }: { source: string | null; si
   if (key === "instagram") return <InstagramSvg size={size} />;
   if (key === "shopify")   return <ShopifySvg size={size} />;
   if (key === "slack")     return <SlackSvg size={size} />;
+  if (key === "hubspot")   return <HubSpotSvg size={size} />;
   return <UnknownSvg size={size} />;
 }
 

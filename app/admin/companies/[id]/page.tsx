@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/_lib/supabase";
-import SourceIcon from "@/app/_components/SourceIcon";
+import SourceIcon, { SourceIconRaw } from "@/app/_components/SourceIcon";
 import {
   getAdminInvoices, saveAdminInvoices, getActivityLogs, addActivityLog,
   AdminInvoice, ActivityLog, Plan, PLANS, nextInvoiceId, formatDate, timeAgo,
@@ -54,14 +54,41 @@ interface Integration {
   company_id: string;
   channel: string;
   status: "connected" | "disconnected";
+  credentials: Record<string, string>;
 }
 
-const INT_CHANNELS = ["gmail", "slack", "hubspot", "instagram"] as const;
-type IntChannel = typeof INT_CHANNELS[number];
+interface IntChannelConfig {
+  id: string;
+  name: string;
+  comingSoon: boolean;
+  fields: { key: string; label: string; placeholder: string; secret?: boolean }[];
+}
 
-const INT_CHANNEL_LABEL: Record<IntChannel, string> = {
-  gmail: "Gmail", slack: "Slack", hubspot: "HubSpot", instagram: "Instagram",
-};
+const INT_CHANNELS: IntChannelConfig[] = [
+  {
+    id: "gmail", name: "Gmail", comingSoon: false,
+    fields: [
+      { key: "email",        label: "Gmail address", placeholder: "support@company.com" },
+      { key: "app_password", label: "App password",  placeholder: "xxxx xxxx xxxx xxxx", secret: true },
+    ],
+  },
+  {
+    id: "slack", name: "Slack", comingSoon: false,
+    fields: [
+      { key: "webhook_url", label: "Webhook URL", placeholder: "https://hooks.slack.com/services/...", secret: true },
+    ],
+  },
+  {
+    id: "hubspot", name: "HubSpot", comingSoon: false,
+    fields: [
+      { key: "api_key", label: "API key", placeholder: "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "instagram", name: "Instagram", comingSoon: true,
+    fields: [],
+  },
+];
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -115,6 +142,88 @@ function buildAIDraft(ticket: Ticket): string {
   return `Hi ${ticket.company_name},\n\nThank you for reaching out — we appreciate you getting in touch.\n\n${body[ticket.issue_category]}\n\nPlease don't hesitate to reply with any additional information and I'll get back to you as soon as possible.\n\nBest regards,\nSupport Team`;
 }
 
+// ── IntConnectModal ────────────────────────────────────────────────────────────
+
+function IntConnectModal({
+  config,
+  companyName,
+  onClose,
+  onSave,
+}: {
+  config: IntChannelConfig;
+  companyName: string;
+  onClose: () => void;
+  onSave: (creds: Record<string, string>) => Promise<void>;
+}) {
+  const [fields, setFields] = useState<Record<string, string>>(
+    Object.fromEntries(config.fields.map((f) => [f.key, ""]))
+  );
+  const [saving, setSaving] = useState(false);
+
+  const valid = config.fields.every((f) => fields[f.key]?.trim());
+
+  const handle = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    await onSave(fields);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 sm:p-7"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sm:hidden w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5" />
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2.5">
+            <SourceIconRaw source={config.id} size={20} />
+            <h2 className="text-base font-bold text-zinc-900">Connect {config.name}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 text-xl transition-colors"
+          >
+            ×
+          </button>
+        </div>
+        <p className="text-sm text-zinc-500 mt-1 mb-5">
+          Setting up {config.name} for <span className="font-medium text-zinc-700">{companyName}</span>.
+        </p>
+
+        <div className="flex flex-col gap-3.5">
+          {config.fields.map((f) => (
+            <div key={f.key}>
+              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
+                {f.label}
+              </label>
+              <input
+                type={f.secret ? "password" : "text"}
+                placeholder={f.placeholder}
+                value={fields[f.key]}
+                onChange={(e) => setFields((prev) => ({ ...prev, [f.key]: e.target.value }))}
+                onKeyDown={(e) => e.key === "Enter" && handle()}
+                className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-zinc-50 placeholder-zinc-400"
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={handle}
+          disabled={!valid || saving}
+          className="w-full mt-5 text-sm font-semibold bg-indigo-600 text-white py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? "Connecting…" : `Connect ${config.name}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── PlanModal ──────────────────────────────────────────────────────────────────
 
 function PlanModal({ company, onClose, onDone }: { company: SupabaseCompany; onClose: () => void; onDone: (plan: Plan) => void }) {
@@ -164,7 +273,8 @@ export default function CompanyDetailPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText,      setReplyText]      = useState("");
   const [suggesting,     setSuggesting]     = useState(false);
-  const [integrations,   setIntegrations]   = useState<Integration[]>([]);
+  const [integrations,     setIntegrations]     = useState<Integration[]>([]);
+  const [modalIntChannel,  setModalIntChannel]  = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
@@ -182,7 +292,7 @@ export default function CompanyDetailPage() {
     const { data: ticketData } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
     if (ticketData) setTickets(ticketData as Ticket[]);
 
-    const { data: intData } = await supabase.from("integrations").select("company_id, channel, status").eq("company_id", id);
+    const { data: intData } = await supabase.from("integrations").select("company_id, channel, status, credentials").eq("company_id", id);
     if (intData) setIntegrations(intData as Integration[]);
 
     const allInvs = getAdminInvoices();
@@ -270,6 +380,27 @@ export default function CompanyDetailPage() {
       setReplyText(buildAIDraft(selectedTicket));
       setSuggesting(false);
     }, 1400);
+  };
+
+  const handleIntConnect = async (channelId: string, credentials: Record<string, string>) => {
+    if (!supabase) return;
+    await supabase.from("integrations").upsert(
+      { company_id: id, channel: channelId, status: "connected", credentials },
+      { onConflict: "company_id,channel" }
+    );
+    setModalIntChannel(null);
+    await load();
+    showToast(`${INT_CHANNELS.find((c) => c.id === channelId)?.name} connected`);
+  };
+
+  const handleIntDisconnect = async (channelId: string) => {
+    if (!supabase) return;
+    await supabase.from("integrations").upsert(
+      { company_id: id, channel: channelId, status: "disconnected", credentials: {} },
+      { onConflict: "company_id,channel" }
+    );
+    await load();
+    showToast("Integration disconnected");
   };
 
   // ── Loading / not found ────────────────────────────────────────────────────
@@ -430,6 +561,18 @@ export default function CompanyDetailPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
       {modal === "credits" && <PlanModal company={company} onClose={() => setModal(null)} onDone={handleIssueCredits} />}
+
+      {modalIntChannel && (() => {
+        const cfg = INT_CHANNELS.find((c) => c.id === modalIntChannel);
+        return cfg ? (
+          <IntConnectModal
+            config={cfg}
+            companyName={company.name}
+            onClose={() => setModalIntChannel(null)}
+            onSave={(creds) => handleIntConnect(modalIntChannel, creds)}
+          />
+        ) : null;
+      })()}
 
       {toast && (
         <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 bg-zinc-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
@@ -600,22 +743,51 @@ export default function CompanyDetailPage() {
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
         <div className="px-5 py-4 border-b border-zinc-100">
           <p className="text-sm font-semibold text-zinc-900">Integrations</p>
+          <p className="text-xs text-zinc-400 mt-0.5">Connect channels for {company.name}.</p>
         </div>
-        <div className="px-5 py-4 flex flex-wrap gap-2">
+        <div className="divide-y divide-zinc-100">
           {INT_CHANNELS.map((ch) => {
-            const connected = integrations.some((i) => i.channel === ch && i.status === "connected");
+            const row       = integrations.find((i) => i.channel === ch.id && i.status === "connected");
+            const connected = !!row;
             return (
-              <span
-                key={ch}
-                className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
-                  connected
-                    ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                    : "bg-zinc-50 text-zinc-400 border border-zinc-100"
-                }`}
-              >
-                {connected && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 flex-shrink-0" />}
-                {INT_CHANNEL_LABEL[ch]}
-              </span>
+              <div key={ch.id} className="flex items-center gap-3.5 px-5 py-3.5">
+                <SourceIconRaw source={ch.id} size={20} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-900">{ch.name}</p>
+                  {connected && row.credentials?.email && (
+                    <p className="text-xs text-zinc-400 mt-0.5 truncate">{row.credentials.email}</p>
+                  )}
+                </div>
+
+                {ch.comingSoon ? (
+                  <span className="text-[10px] font-semibold tracking-wider uppercase bg-zinc-100 text-zinc-400 px-2 py-1 rounded-md flex-shrink-0">
+                    Soon
+                  </span>
+                ) : connected ? (
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                      Connected
+                    </span>
+                    <button
+                      onClick={() => handleIntDisconnect(ch.id)}
+                      className="text-xs font-medium text-zinc-400 hover:text-zinc-700 border border-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-50 transition-colors"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-[11px] text-zinc-400">Not connected</span>
+                    <button
+                      onClick={() => setModalIntChannel(ch.id)}
+                      className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      Connect
+                    </button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
