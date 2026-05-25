@@ -99,7 +99,8 @@ export default function TicketsPage() {
   useEffect(() => {
     if (!supabase) { setLoading(false); return; }
 
-    const userEmail = localStorage.getItem("userEmail");
+    const { data: { session } } = await supabase.auth.getSession();
+    const userEmail = session?.user?.email;
     if (!userEmail) { setNoEmail(true); setLoading(false); return; }
 
     supabase

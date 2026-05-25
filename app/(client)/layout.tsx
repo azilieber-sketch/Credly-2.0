@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar, { NavItem } from "@/app/_components/Sidebar";
+import { supabase } from "@/app/_lib/supabase";
 
 const NAV: NavItem[] = [
   {
@@ -75,16 +76,23 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
-    if (!localStorage.getItem("isLoggedIn")) { router.replace("/"); return; }
-    if (localStorage.getItem("userRole") === "admin") { router.replace("/admin"); return; }
-    setEmail(localStorage.getItem("userEmail"));
-    setReady(true);
+    if (!supabase) { router.replace("/"); return; }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { router.replace("/"); return; }
+      if (session.user.email === "admin@credly.com") { router.replace("/admin"); return; }
+      setEmail(session.user.email ?? null);
+      setReady(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) router.replace("/");
+    });
+    return () => subscription.unsubscribe();
   }, [router]);
 
   useEffect(() => { setNavOpen(false); }, [pathname]);
 
-  const logout = () => {
-    ["isLoggedIn", "userEmail", "userRole"].forEach((k) => localStorage.removeItem(k));
+  const logout = async () => {
+    await supabase!.auth.signOut();
     router.push("/");
   };
 

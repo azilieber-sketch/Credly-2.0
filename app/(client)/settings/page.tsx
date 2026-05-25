@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopUpModal from "@/app/_components/TopUpModal";
 import { getClient, saveClient, ClientData, DEFAULT_CLIENT, PLANS } from "@/app/_lib/store";
+import { supabase } from "@/app/_lib/supabase";
 
 const SectionHeader = ({ title, description }: { title: string; description: string }) => (
   <div className="mb-5">
@@ -44,11 +45,14 @@ export default function SettingsPage() {
   const [saved, setSaved]         = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
 
-  const load = () => {
+  const load = async () => {
     const data = getClient();
     setClient(data);
-    setEmail(localStorage.getItem("userEmail") ?? "");
-    setName(data.name || (localStorage.getItem("userEmail") ?? "").split("@")[0]);
+    const sessionEmail = supabase
+      ? (await supabase.auth.getSession()).data.session?.user?.email ?? ""
+      : "";
+    setEmail(sessionEmail);
+    setName(data.name || (sessionEmail ? sessionEmail.split("@")[0] : ""));
   };
 
   useEffect(() => { load(); }, []);
@@ -57,7 +61,6 @@ export default function SettingsPage() {
     const updated = { ...client, name };
     saveClient(updated);
     setClient(updated);
-    localStorage.setItem("userName", name);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -68,14 +71,11 @@ export default function SettingsPage() {
     setClient(updated);
   };
 
-  const deleteAccount = () => {
+  const deleteAccount = async () => {
+    if (supabase) await supabase.auth.signOut();
     localStorage.removeItem("credly_client");
     localStorage.removeItem("credly_companies");
     localStorage.removeItem("credly_admin_invoices");
-    localStorage.removeItem("isLoggedIn");
-    localStorage.removeItem("userEmail");
-    localStorage.removeItem("userRole");
-    localStorage.removeItem("userName");
     router.push("/");
   };
 

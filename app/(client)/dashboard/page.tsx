@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import TopUpModal from "@/app/_components/TopUpModal";
 import { getClient, ClientData, DEFAULT_CLIENT } from "@/app/_lib/store";
+import { supabase } from "@/app/_lib/supabase";
 
 const BREAKDOWN_RATIOS = [
   { label: "Shipping",  ratio: 0.52, color: "bg-indigo-400" },
@@ -16,10 +17,12 @@ export default function DashboardPage() {
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [displayName, setDisplayName] = useState<string | null>(null);
 
-  const load = () => {
+  const load = async () => {
     const data = getClient();
     setClient(data);
-    const email = localStorage.getItem("userEmail") ?? "";
+    const email = supabase
+      ? (await supabase.auth.getSession()).data.session?.user?.email ?? ""
+      : "";
     setDisplayName(data.name || (email ? email.split("@")[0] : null));
   };
 

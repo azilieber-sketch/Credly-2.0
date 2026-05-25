@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/app/_lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,18 +19,62 @@ const SectionLabel = ({ children }: { children: string }) => (
 // ─── Auth Modal ───────────────────────────────────────────────────────────────
 
 const AuthModal = ({ onClose }: { onClose: () => void }) => {
-  const [email, setEmail] = useState("");
+  const [mode,       setMode]       = useState<"signin" | "signup">("signin");
+  const [email,      setEmail]      = useState("");
+  const [password,   setPassword]   = useState("");
+  const [error,      setError]      = useState<string | null>(null);
+  const [loading,    setLoading]    = useState(false);
+  const [checkEmail, setCheckEmail] = useState(false);
   const router = useRouter();
 
   const ADMIN_EMAIL = "admin@credly.com";
 
-  const login = (emailValue?: string) => {
-    const isAdmin = emailValue === ADMIN_EMAIL;
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("userRole", isAdmin ? "admin" : "client");
-    if (emailValue) localStorage.setItem("userEmail", emailValue);
-    router.push(isAdmin ? "/admin" : "/dashboard");
+  const handleGoogle = async () => {
+    if (!supabase) return;
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/dashboard` },
+    });
   };
+
+  const submit = async () => {
+    if (!email || !password || loading) return;
+    if (!supabase) { setError("Service not configured."); return; }
+    setLoading(true);
+    setError(null);
+
+    if (mode === "signin") {
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+      if (err) { setError(err.message); setLoading(false); return; }
+      router.push(data.user?.email === ADMIN_EMAIL ? "/admin" : "/dashboard");
+    } else {
+      const { data, error: err } = await supabase.auth.signUp({ email, password });
+      if (err) { setError(err.message); setLoading(false); return; }
+      if (data.session) {
+        router.push(data.user?.email === ADMIN_EMAIL ? "/admin" : "/dashboard");
+      } else {
+        setCheckEmail(true);
+        setLoading(false);
+      }
+    }
+  };
+
+  if (checkEmail) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
+        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 relative" onClick={(e) => e.stopPropagation()}>
+          <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-lg">×</button>
+          <span className="text-base font-bold text-gray-900">Credly</span>
+          <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-2">Check your email</h2>
+          <p className="text-stone-500 text-sm leading-relaxed">
+            We sent a confirmation link to{" "}
+            <span className="font-medium text-gray-900">{email}</span>.
+            Click it to activate your account, then sign in.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -48,11 +93,15 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
         </button>
 
         <span className="text-base font-bold text-gray-900">Credly</span>
-        <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">Get started</h2>
-        <p className="text-stone-500 text-sm mb-7">Sign in or create your account in seconds.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">
+          {mode === "signin" ? "Welcome back" : "Get started"}
+        </h2>
+        <p className="text-stone-500 text-sm mb-7">
+          {mode === "signin" ? "Sign in to your Credly account." : "Create your account in seconds."}
+        </p>
 
         <button
-          onClick={() => login()}
+          onClick={handleGoogle}
           className="w-full flex items-center justify-center gap-3 border border-stone-200 rounded-2xl px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-50 active:scale-[0.98] transition-all mb-5"
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -76,15 +125,26 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && email && login(email)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
             className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
           />
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && submit()}
+            className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
+          />
+          {error && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>
+          )}
           <button
-            onClick={() => email && login(email)}
-            disabled={!email}
+            onClick={submit}
+            disabled={!email || !password || loading}
             className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
           >
-            Continue
+            {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
           </button>
         </div>
 
@@ -94,8 +154,26 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
           <a href="#" className="underline hover:text-stone-600 transition-colors">Privacy Policy</a>.
         </p>
 
-        <p className="text-[11px] text-stone-300 text-center mt-3">
-          Admin access: <span className="font-mono">admin@credly.com</span>
+        <p className="text-xs text-stone-500 text-center mt-3">
+          {mode === "signin" ? (
+            <>Don&apos;t have an account?{" "}
+              <button
+                onClick={() => { setMode("signup"); setError(null); }}
+                className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+              >
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>Already have an account?{" "}
+              <button
+                onClick={() => { setMode("signin"); setError(null); }}
+                className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+              >
+                Sign in
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>
