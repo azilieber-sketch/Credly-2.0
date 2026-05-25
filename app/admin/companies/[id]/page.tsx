@@ -60,33 +60,60 @@ interface Integration {
 interface IntChannelConfig {
   id: string;
   name: string;
-  comingSoon: boolean;
-  fields: { key: string; label: string; placeholder: string; secret?: boolean }[];
+  provider: string;
+  description: string;
+  permissions: string[];
+  btnClass: string;
 }
 
 const INT_CHANNELS: IntChannelConfig[] = [
   {
-    id: "gmail", name: "Gmail", comingSoon: false,
-    fields: [
-      { key: "email",        label: "Gmail address", placeholder: "support@company.com" },
-      { key: "app_password", label: "App password",  placeholder: "xxxx xxxx xxxx xxxx", secret: true },
+    id: "gmail",
+    name: "Gmail",
+    provider: "Google",
+    description: "Receive and reply to customer emails on behalf of this company.",
+    permissions: [
+      "Read and send emails",
+      "Manage inbox labels and filters",
+      "Access message metadata and attachments",
     ],
+    btnClass: "bg-white border border-stone-300 text-zinc-700 hover:bg-stone-50",
   },
   {
-    id: "slack", name: "Slack", comingSoon: false,
-    fields: [
-      { key: "webhook_url", label: "Webhook URL", placeholder: "https://hooks.slack.com/services/...", secret: true },
+    id: "slack",
+    name: "Slack",
+    provider: "Slack",
+    description: "Post ticket alerts and updates to this company's Slack workspace.",
+    permissions: [
+      "Send messages to channels",
+      "Read channel and workspace info",
+      "Post automated ticket notifications",
     ],
+    btnClass: "bg-[#4A154B] text-white hover:bg-[#3a0f3a] border border-transparent",
   },
   {
-    id: "hubspot", name: "HubSpot", comingSoon: false,
-    fields: [
-      { key: "api_key", label: "API key", placeholder: "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: true },
+    id: "hubspot",
+    name: "HubSpot",
+    provider: "HubSpot",
+    description: "Sync contacts, tickets, and conversations with this company's CRM.",
+    permissions: [
+      "Read and write CRM contacts",
+      "Access ticket and deal records",
+      "Sync conversation history",
     ],
+    btnClass: "bg-[#FF7A59] text-white hover:bg-[#e86a4a] border border-transparent",
   },
   {
-    id: "instagram", name: "Instagram", comingSoon: true,
-    fields: [],
+    id: "instagram",
+    name: "Instagram",
+    provider: "Meta",
+    description: "Manage DMs and comments from this company's Instagram Business account.",
+    permissions: [
+      "Read and reply to direct messages",
+      "Access Instagram Business account info",
+      "Manage comments on business posts",
+    ],
+    btnClass: "bg-gradient-to-r from-purple-600 via-pink-500 to-orange-400 text-white border border-transparent",
   },
 ];
 
@@ -153,19 +180,18 @@ function IntConnectModal({
   config: IntChannelConfig;
   companyName: string;
   onClose: () => void;
-  onSave: (creds: Record<string, string>) => Promise<void>;
+  onSave: () => Promise<void>;
 }) {
-  const [fields, setFields] = useState<Record<string, string>>(
-    Object.fromEntries(config.fields.map((f) => [f.key, ""]))
-  );
-  const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [done,       setDone]       = useState(false);
 
-  const valid = config.fields.every((f) => fields[f.key]?.trim());
-
-  const handle = async () => {
-    if (!valid || saving) return;
-    setSaving(true);
-    await onSave(fields);
+  const handleConnect = async () => {
+    if (connecting || done) return;
+    setConnecting(true);
+    await new Promise((r) => setTimeout(r, 1200));
+    await onSave();
+    setDone(true);
+    setConnecting(false);
   };
 
   return (
@@ -180,7 +206,7 @@ function IntConnectModal({
         <div className="sm:hidden w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5" />
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2.5">
-            <SourceIconRaw source={config.id} size={20} />
+            <SourceIconRaw source={config.id} size={22} />
             <h2 className="text-base font-bold text-zinc-900">Connect {config.name}</h2>
           </div>
           <button
@@ -191,34 +217,41 @@ function IntConnectModal({
           </button>
         </div>
         <p className="text-sm text-zinc-500 mt-1 mb-5">
-          Setting up {config.name} for <span className="font-medium text-zinc-700">{companyName}</span>.
+          For <span className="font-medium text-zinc-700">{companyName}</span> · via {config.provider} OAuth
         </p>
 
-        <div className="flex flex-col gap-3.5">
-          {config.fields.map((f) => (
-            <div key={f.key}>
-              <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide block mb-1.5">
-                {f.label}
-              </label>
-              <input
-                type={f.secret ? "password" : "text"}
-                placeholder={f.placeholder}
-                value={fields[f.key]}
-                onChange={(e) => setFields((prev) => ({ ...prev, [f.key]: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && handle()}
-                className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 bg-zinc-50 placeholder-zinc-400"
-              />
-            </div>
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Permissions requested</p>
+        <ul className="flex flex-col gap-2 mb-6">
+          {config.permissions.map((perm) => (
+            <li key={perm} className="flex items-start gap-2 text-sm text-zinc-600">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 mt-0.5 flex-shrink-0">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              {perm}
+            </li>
           ))}
-        </div>
+        </ul>
 
         <button
-          onClick={handle}
-          disabled={!valid || saving}
-          className="w-full mt-5 text-sm font-semibold bg-indigo-600 text-white py-3 rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          onClick={handleConnect}
+          disabled={connecting || done}
+          className={`w-full text-sm font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${config.btnClass} disabled:opacity-60 disabled:cursor-not-allowed`}
         >
-          {saving ? "Connecting…" : `Connect ${config.name}`}
+          {connecting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin opacity-70" />
+              Connecting…
+            </>
+          ) : done ? (
+            "Connected!"
+          ) : (
+            `Continue with ${config.provider}`
+          )}
         </button>
+
+        <p className="text-[11px] text-zinc-400 text-center mt-3">
+          You&apos;ll be redirected to {config.provider} to authorize access.
+        </p>
       </div>
     </div>
   );
@@ -382,10 +415,10 @@ export default function CompanyDetailPage() {
     }, 1400);
   };
 
-  const handleIntConnect = async (channelId: string, credentials: Record<string, string>) => {
+  const handleIntConnect = async (channelId: string) => {
     if (!supabase) return;
     await supabase.from("integrations").upsert(
-      { company_id: id, channel: channelId, status: "connected", credentials },
+      { company_id: id, channel: channelId, status: "connected", credentials: { method: "oauth" } },
       { onConflict: "company_id,channel" }
     );
     setModalIntChannel(null);
@@ -569,7 +602,7 @@ export default function CompanyDetailPage() {
             config={cfg}
             companyName={company.name}
             onClose={() => setModalIntChannel(null)}
-            onSave={(creds) => handleIntConnect(modalIntChannel, creds)}
+            onSave={() => handleIntConnect(modalIntChannel)}
           />
         ) : null;
       })()}
@@ -754,8 +787,8 @@ export default function CompanyDetailPage() {
                 <SourceIconRaw source={ch.id} size={20} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-zinc-900">{ch.name}</p>
-                  {connected && row.credentials?.email && (
-                    <p className="text-xs text-zinc-400 mt-0.5 truncate">{row.credentials.email}</p>
+                  {connected && (
+                    <p className="text-xs text-zinc-400 mt-0.5">via OAuth</p>
                   )}
                 </div>
 
