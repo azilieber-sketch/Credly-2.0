@@ -149,34 +149,21 @@ export default function CompanyDetailPage() {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [replyText,      setReplyText]      = useState("");
   const [suggesting,     setSuggesting]     = useState(false);
-  const [debugMsg,       setDebugMsg]       = useState<string | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
   const load = useCallback(async () => {
-    if (!supabase) { setDebugMsg("❌ Supabase client is null — env vars missing from build"); setLoading(false); return; }
+    if (!supabase) { setLoading(false); return; }
     setLoading(true);
 
-    const { data: coData, error: coError } = await supabase.from("companies").select("*").eq("id", id).single();
+    const { data: coData } = await supabase.from("companies").select("*").eq("id", id).single();
     if (!coData) {
-      setDebugMsg(`❌ Company not found — id: ${id} | error: ${coError?.message ?? "unknown"}`);
       setNotFound(true); setLoading(false); return;
     }
     setCompany(coData as SupabaseCompany);
     setNotFound(false);
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const role = session ? `authenticated (uid: ${session.user.id})` : "anon (no session)";
-
-    const { data: allTickets, error: allError } = await supabase.from("tickets").select("id, company_id").limit(5);
-    const { data: ticketData, error: ticketError } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
-
-    setDebugMsg(
-      `role: ${role} | ` +
-      `all tickets (no filter, limit 5): ${JSON.stringify(allTickets)} | ` +
-      `filtered by company_id=${id}: returned ${ticketData?.length ?? "null"} | ` +
-      `error: ${ticketError?.message ?? "none"}`
-    );
+    const { data: ticketData } = await supabase.from("tickets").select("*").eq("company_id", id).order("created_at", { ascending: false });
     if (ticketData) setTickets(ticketData as Ticket[]);
 
     const allInvs = getAdminInvoices();
@@ -436,12 +423,6 @@ export default function CompanyDetailPage() {
         <span>/</span>
         <span className="text-zinc-700 font-medium truncate">{company.name}</span>
       </div>
-
-      {debugMsg && (
-        <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-xs font-mono text-amber-800 break-all">
-          {debugMsg}
-        </div>
-      )}
 
       {/* Header */}
       <div className="mb-6 md:mb-8">
