@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/app/_lib/supabase";
+import NotificationBell from "@/app/_components/NotificationBell";
 
 const NAV = [
   {
@@ -58,6 +59,15 @@ const NAV = [
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
+      </svg>
+    ),
+  },
+  {
+    href: "/admin/tickets",
+    label: "Tickets",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </svg>
     ),
   },
@@ -131,15 +141,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Admin
           </span>
         </div>
-        <button
-          onClick={() => setNavOpen(true)}
-          className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 transition-colors"
-          aria-label="Open navigation"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12h18M3 6h18M3 18h12" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            onClick={() => setNavOpen(true)}
+            className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 transition-colors"
+            aria-label="Open navigation"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 12h18M3 6h18M3 18h12" />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {/* Backdrop */}
@@ -170,13 +183,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               Admin
             </span>
           </div>
-          <button
-            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 text-xl leading-none transition-colors"
-            onClick={() => setNavOpen(false)}
-            aria-label="Close navigation"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1">
+            <div className="hidden md:block">
+              <NotificationBell />
+            </div>
+            <button
+              className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 text-xl leading-none transition-colors"
+              onClick={() => setNavOpen(false)}
+              aria-label="Close navigation"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Nav */}

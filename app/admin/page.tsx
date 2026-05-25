@@ -1,214 +1,265 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import {
-  getCompanies, getAdminInvoices, getActivityLogs,
-  Company, AdminInvoice, ActivityLog,
-  companyStatus, PLAN_MRR, timeAgo,
-} from "@/app/_lib/store";
+import { supabase } from "@/app/_lib/supabase";
+import SourceIcon from "@/app/_components/SourceIcon";
 
-const KPI = ({
-  label, value, sub, trend, color = "text-zinc-900",
-}: {
-  label: string; value: string; sub: string; trend?: string; color?: string;
-}) => (
-  <div className="bg-white rounded-xl border border-zinc-200 p-4 sm:p-5">
-    <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2 sm:mb-3">{label}</p>
-    <p className={`text-2xl sm:text-3xl font-black leading-none tabular-nums mb-1.5 ${color}`}>{value}</p>
-    <div className="flex items-center gap-1.5">
-      {trend && (
-        <span className="text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-          {trend}
-        </span>
-      )}
-      <p className="text-xs text-zinc-400 truncate">{sub}</p>
-    </div>
-  </div>
-);
+type Priority    = "low" | "medium" | "high";
+type TicketStatus = "open" | "in-progress" | "resolved";
 
-const ACTIVITY_CONFIG: Record<string, { label: string; dot: string; text: string }> = {
-  credit_issued:      { label: "Credits",   dot: "bg-indigo-500",  text: "text-indigo-600"  },
-  company_added:      { label: "New",       dot: "bg-emerald-500", text: "text-emerald-600" },
-  invoice_paid:       { label: "Payment",   dot: "bg-emerald-500", text: "text-emerald-600" },
-  invoice_generated:  { label: "Invoice",   dot: "bg-amber-500",   text: "text-amber-600"   },
-  plan_changed:       { label: "Plan",      dot: "bg-violet-500",  text: "text-violet-600"  },
-  company_suspended:  { label: "Suspended", dot: "bg-red-500",     text: "text-red-600"     },
-  company_activated:  { label: "Activated", dot: "bg-emerald-500", text: "text-emerald-600" },
+interface Ticket {
+  id: string;
+  company_id: string | null;
+  company_name: string;
+  email: string;
+  issue_category: string;
+  priority: Priority;
+  description: string;
+  status: TicketStatus;
+  created_at: string;
+  reply: string | null;
+  replied_at: string | null;
+  source: string | null;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  email: string;
+  industry: string;
+  credits: number;
+  credits_used: number;
+  status: "active" | "suspended";
+  created_at: string;
+}
+
+function timeAgo(iso: string): string {
+  const diff  = Date.now() - new Date(iso).getTime();
+  const mins  = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days  = Math.floor(diff / 86400000);
+  if (mins  < 1)  return "just now";
+  if (mins  < 60) return `${mins}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+
+const PRIORITY_DOT: Record<Priority, string> = {
+  low:    "bg-stone-300",
+  medium: "bg-amber-400",
+  high:   "bg-red-500",
 };
 
-const USAGE_MONTHS = [
-  { label: "Dec", value: 2800 },
-  { label: "Jan", value: 3900 },
-  { label: "Feb", value: 4600 },
-  { label: "Mar", value: 5800 },
-  { label: "Apr", value: 6400 },
-  { label: "May", value: 4688, partial: true },
-];
+const PRIORITY_BADGE: Record<Priority, string> = {
+  low:    "bg-stone-50 text-stone-500",
+  medium: "bg-amber-50 text-amber-600",
+  high:   "bg-red-50 text-red-600",
+};
+
+const STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
+  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
+  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500"  },
+  resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+};
 
 export default function AdminOverview() {
+  const [tickets,   setTickets]   = useState<Ticket[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [invoices,  setInvoices]  = useState<AdminInvoice[]>([]);
-  const [activity,  setActivity]  = useState<ActivityLog[]>([]);
+  const [loading,   setLoading]   = useState(true);
 
-  useEffect(() => {
-    setCompanies(getCompanies());
-    setInvoices(getAdminInvoices());
-    setActivity(getActivityLogs());
+  const load = useCallback(async () => {
+    if (!supabase) { setLoading(false); return; }
+    setLoading(true);
+    const [{ data: tData }, { data: cData }] = await Promise.all([
+      supabase.from("tickets").select("*").order("created_at", { ascending: false }),
+      supabase.from("companies").select("*").order("name"),
+    ]);
+    if (tData) setTickets(tData as Ticket[]);
+    if (cData) setCompanies(cData as Company[]);
+    setLoading(false);
   }, []);
 
-  const mrr         = companies.filter(c => c.status !== "suspended").reduce((s, c) => s + (PLAN_MRR[c.plan] ?? 0), 0);
-  const activeCount = companies.filter(c => companyStatus(c) === "active").length;
-  const creditsMTD  = companies.reduce((s, c) => s + c.used, 0);
-  const pendingInvs = invoices.filter(i => i.status === "pending").length;
-  const atRisk      = companies.filter(c => companyStatus(c) === "depleted" || c.status === "suspended");
-  const usageMax    = Math.max(...USAGE_MONTHS.map(m => m.value));
+  useEffect(() => {
+    load();
+    if (!supabase) return;
+    const channel = supabase
+      .channel("admin-overview")
+      .on("postgres_changes", { event: "*", schema: "public", table: "tickets" }, () => load())
+      .subscribe();
+    return () => { supabase!.removeChannel(channel); };
+  }, [load]);
+
+  // ── Metrics ──────────────────────────────────────────────────────────────────
+  const now   = Date.now();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  const openTickets       = tickets.filter((t) => t.status === "open");
+  const highPriority      = tickets.filter((t) => t.priority === "high" && t.status !== "resolved");
+  const resolvedToday     = tickets.filter((t) => t.status === "resolved" && t.replied_at && new Date(t.replied_at) >= today);
+  const companiesWaiting  = companies.filter((co) =>
+    tickets.some((t) => t.company_id === co.id && t.status === "open" && now - new Date(t.created_at).getTime() > 86400000)
+  );
+
+  // ── Per-company row data ──────────────────────────────────────────────────────
+  const companyRows = companies.map((co) => {
+    const coTickets = tickets.filter((t) => t.company_id === co.id);
+    const openCount = coTickets.filter((t) => t.status === "open").length;
+    const hasHigh   = coTickets.some((t) => t.priority === "high" && t.status !== "resolved");
+    const last      = coTickets[0]?.created_at ?? null;
+    const indicator = hasHigh ? "red" : openCount > 0 ? "amber" : "green";
+    return { ...co, openCount, indicator, last };
+  }).sort((a, b) => {
+    const o = { red: 0, amber: 1, green: 2 } as const;
+    return o[a.indicator as keyof typeof o] - o[b.indicator as keyof typeof o];
+  });
+
+  const recentTickets = tickets.slice(0, 10);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div className="mb-6 md:mb-8">
         <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Credly Admin</p>
-        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Platform Overview</h1>
-        <p className="text-sm text-zinc-400 mt-0.5">May 2026 · {companies.length} companies</p>
+        <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Support Operations</h1>
+        <p className="text-sm text-zinc-400 mt-0.5">{companies.length} companies · Live</p>
       </div>
 
-      {/* ── KPI row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6 md:mb-8">
-        <KPI label="Monthly Revenue"  value={`$${mrr.toLocaleString()}`}  sub="Active accounts"          trend="+12%" />
-        <KPI label="Active Companies" value={activeCount.toString()}       sub={`of ${companies.length} total`}       />
-        <KPI label="Credits MTD"      value={creditsMTD.toLocaleString()}  sub="All accounts"             trend="+8%"  />
-        <KPI label="Pending Invoices" value={pendingInvs.toString()}       sub="Awaiting payment"
-          color={pendingInvs > 0 ? "text-amber-500" : "text-zinc-900"} />
+      {/* KPI row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        {[
+          {
+            label: "Open Tickets",
+            value: loading ? "—" : openTickets.length.toString(),
+            sub: "Across all companies",
+            color: !loading && openTickets.length > 0 ? "text-amber-500" : "text-zinc-900",
+          },
+          {
+            label: "High Priority",
+            value: loading ? "—" : highPriority.length.toString(),
+            sub: "Need attention now",
+            color: !loading && highPriority.length > 0 ? "text-red-500" : "text-zinc-900",
+          },
+          {
+            label: "Resolved Today",
+            value: loading ? "—" : resolvedToday.length.toString(),
+            sub: "Since midnight",
+            color: "text-emerald-600",
+          },
+          {
+            label: "Waiting 24h+",
+            value: loading ? "—" : companiesWaiting.length.toString(),
+            sub: "Companies overdue",
+            color: !loading && companiesWaiting.length > 0 ? "text-red-500" : "text-zinc-900",
+          },
+        ].map((kpi) => (
+          <div key={kpi.label} className="bg-white rounded-xl border border-zinc-200 p-4 sm:p-5">
+            <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{kpi.label}</p>
+            <p className={`text-2xl sm:text-3xl font-black leading-none tabular-nums mb-1.5 ${kpi.color}`}>{kpi.value}</p>
+            <p className="text-xs text-zinc-400">{kpi.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* ── Chart + Revenue by plan ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 mb-5">
-
-        {/* Bar chart */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 p-5 sm:p-6">
-          <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <div>
-              <p className="text-sm font-semibold text-zinc-900">Credit consumption</p>
-              <p className="text-xs text-zinc-400 mt-0.5">Platform-wide, last 6 months</p>
-            </div>
-            <span className="text-xs font-semibold text-zinc-400">{creditsMTD.toLocaleString()} MTD</span>
-          </div>
-          <div className="flex items-end gap-1.5 sm:gap-2 h-24 sm:h-28">
-            {USAGE_MONTHS.map((m) => {
-              const pct = Math.round((m.value / usageMax) * 100);
-              return (
-                <div key={m.label} className="flex flex-col items-center gap-1.5 flex-1">
-                  <span className="text-[9px] sm:text-[10px] text-zinc-400 tabular-nums hidden sm:block">{(m.value / 1000).toFixed(1)}k</span>
-                  <div className="w-full flex flex-col justify-end" style={{ height: "72px" }}>
-                    <div
-                      className={`w-full rounded-t-md transition-all ${m.partial ? "bg-indigo-300" : "bg-indigo-500"}`}
-                      style={{ height: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="text-[9px] sm:text-[10px] text-zinc-400">{m.label}</span>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[10px] text-zinc-400 mt-2 sm:mt-3">May is a partial month</p>
+      {/* Company list */}
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+          <p className="text-sm font-semibold text-zinc-900">Companies</p>
+          <Link href="/admin/companies" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
+            Manage all →
+          </Link>
         </div>
-
-        {/* Revenue by plan */}
-        <div className="bg-white rounded-xl border border-zinc-200 p-5 sm:p-6">
-          <p className="text-sm font-semibold text-zinc-900 mb-1">Revenue by plan</p>
-          <p className="text-xs text-zinc-400 mb-4 sm:mb-5">Active accounts</p>
-          <div className="flex flex-col gap-4">
-            {(["Scale", "Growth", "Starter"] as const).map((plan) => {
-              const count   = companies.filter(c => c.plan === plan && c.status !== "suspended").length;
-              const revenue = count * (PLAN_MRR[plan] ?? 0);
-              const pct     = mrr > 0 ? Math.round((revenue / mrr) * 100) : 0;
-              const colors: Record<string, string> = { Scale: "bg-indigo-500", Growth: "bg-violet-400", Starter: "bg-sky-400" };
-              return (
-                <div key={plan}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-medium text-zinc-600">{plan}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-400">{count} co.</span>
-                      <span className="text-xs font-semibold text-zinc-900">${revenue}</span>
-                    </div>
-                  </div>
-                  <div className="w-full h-1.5 bg-zinc-100 rounded-full">
-                    <div className={`h-1.5 rounded-full ${colors[plan]}`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           </div>
-        </div>
-      </div>
-
-      {/* ── Activity feed + At risk ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
-
-        {/* Recent activity */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-zinc-200 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
-            <p className="text-sm font-semibold text-zinc-900">Recent activity</p>
-            <Link href="/admin/activity" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
-              View all →
-            </Link>
-          </div>
+        ) : companyRows.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-zinc-400">No companies yet.</div>
+        ) : (
           <div className="divide-y divide-zinc-100">
-            {activity.slice(0, 6).map((log) => {
-              const cfg = ACTIVITY_CONFIG[log.type] ?? { label: "Event", dot: "bg-zinc-400", text: "text-zinc-600" };
-              return (
-                <div key={log.id} className="flex items-start sm:items-center gap-3 px-5 py-3">
-                  <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 mt-1 sm:mt-0 ${cfg.dot}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-zinc-700 truncate">{log.description}</p>
-                    {log.company && (
-                      <p className="text-xs text-zinc-400 mt-0.5">{log.company}</p>
+            {companyRows.map((co) => (
+              <div key={co.id} className="flex items-center gap-3.5 px-5 py-3.5">
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                  co.indicator === "red" ? "bg-red-500" : co.indicator === "amber" ? "bg-amber-400" : "bg-emerald-500"
+                }`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-zinc-900 truncate">{co.name}</p>
+                    {co.openCount > 0 && (
+                      <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                        co.indicator === "red" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
+                      }`}>
+                        {co.openCount} open
+                      </span>
                     )}
                   </div>
-                  <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-2 flex-shrink-0">
-                    {log.amount && <span className="text-xs font-semibold text-zinc-700">{log.amount}</span>}
-                    <span className="text-xs text-zinc-400 whitespace-nowrap">{timeAgo(log.timestamp)}</span>
-                  </div>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {co.last ? `Last ticket ${timeAgo(co.last)}` : "No tickets yet"}
+                  </p>
                 </div>
+                <Link
+                  href={`/admin/companies/${co.id}`}
+                  className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors flex-shrink-0"
+                >
+                  View tickets
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent tickets */}
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+          <p className="text-sm font-semibold text-zinc-900">Recent tickets</p>
+          <Link href="/admin/tickets" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
+            Global inbox →
+          </Link>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : recentTickets.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-zinc-400">No tickets yet.</div>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {recentTickets.map((ticket) => {
+              const st = STATUS_CFG[ticket.status];
+              return (
+                <Link
+                  key={ticket.id}
+                  href={`/admin/companies/${ticket.company_id}`}
+                  className="flex items-center gap-3 px-5 py-3.5 hover:bg-zinc-50 transition-colors group"
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT[ticket.priority]}`} />
+                  <SourceIcon source={ticket.source} size={14} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.company_name}</p>
+                      <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full capitalize flex-shrink-0 ${PRIORITY_BADGE[ticket.priority]}`}>
+                        {ticket.priority}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-500 truncate">{ticket.description}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className={`hidden sm:inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.badge}`}>
+                      <span className={`w-1 h-1 rounded-full ${st.dot}`} />
+                      {st.label}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 whitespace-nowrap">{timeAgo(ticket.created_at)}</span>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300 group-hover:text-zinc-400 transition-colors flex-shrink-0">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </Link>
               );
             })}
           </div>
-        </div>
-
-        {/* At risk */}
-        <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
-            <p className="text-sm font-semibold text-zinc-900">Needs attention</p>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${atRisk.length > 0 ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
-              {atRisk.length}
-            </span>
-          </div>
-          {atRisk.length === 0 ? (
-            <div className="px-5 py-8 text-center">
-              <p className="text-sm text-zinc-400">All accounts healthy</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {atRisk.map((co) => {
-                const st = companyStatus(co);
-                return (
-                  <Link href={`/admin/companies/${co.id}`} key={co.id} className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 transition-colors">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st === "suspended" ? "bg-red-500" : "bg-amber-500"}`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-800 truncate">{co.name}</p>
-                      <p className="text-xs text-zinc-400 mt-0.5 capitalize">{st}</p>
-                    </div>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-zinc-300 flex-shrink-0">
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

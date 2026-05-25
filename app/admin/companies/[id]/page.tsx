@@ -591,6 +591,15 @@ export default function CompanyDetailPage() {
 
   const filteredTickets = ticketFilter === "all" ? tickets : tickets.filter((t) => t.status === ticketFilter);
 
+  const openTicketCount   = tickets.filter((t) => t.status === "open").length;
+  const lastWeek          = new Date(Date.now() - 7 * 86400000);
+  const resolvedThisWeek  = tickets.filter((t) => t.status === "resolved" && t.replied_at && new Date(t.replied_at) >= lastWeek).length;
+  const resolvedWithTimes = tickets.filter((t) => t.status === "resolved" && !!t.replied_at);
+  const avgResponseHours  = resolvedWithTimes.length > 0
+    ? Math.round(resolvedWithTimes.reduce((s, t) => s + (new Date(t.replied_at!).getTime() - new Date(t.created_at).getTime()), 0) / resolvedWithTimes.length / 3600000)
+    : null;
+  const highPriCount      = tickets.filter((t) => t.priority === "high" && t.status !== "resolved").length;
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
       {modal === "credits" && <PlanModal company={company} onClose={() => setModal(null)} onDone={handleIssueCredits} />}
@@ -656,24 +665,175 @@ export default function CompanyDetailPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Ticket stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
         {[
-          { label: "Credits used",      value: company.credits_used.toLocaleString(), sub: "This period" },
-          { label: "Credits remaining", value: creditsRemaining.toLocaleString(),     sub: `of ${company.credits.toLocaleString()} total`,
-            color: creditsRemaining < 100 ? "text-amber-500" : "text-zinc-900" },
-          { label: "Plan",              value: planPrice(company.credits),             sub: `${company.credits.toLocaleString()} credits` },
-          { label: "Invoices",          value: invoices.length.toString(),             sub: `${invoices.filter((i) => i.status === "paid").length} paid` },
+          { label: "Open Tickets",       value: openTicketCount.toString(),                              sub: "Awaiting reply",     color: openTicketCount > 0 ? "text-amber-500" : "text-zinc-900" },
+          { label: "Resolved This Week", value: resolvedThisWeek.toString(),                             sub: "Last 7 days",        color: "text-emerald-600" },
+          { label: "Avg Response",       value: avgResponseHours !== null ? `${avgResponseHours}h` : "—", sub: "Hours to resolve",   color: "text-zinc-900" },
+          { label: "High Priority",      value: highPriCount.toString(),                                 sub: "Need attention",     color: highPriCount > 0 ? "text-red-500" : "text-zinc-900" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-zinc-200 p-4 sm:p-5">
             <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{s.label}</p>
-            <p className={`text-xl sm:text-2xl font-black leading-none tabular-nums mb-1 ${(s as { color?: string }).color ?? "text-zinc-900"}`}>{s.value}</p>
+            <p className={`text-xl sm:text-2xl font-black leading-none tabular-nums mb-1 ${s.color}`}>{s.value}</p>
             <p className="text-xs text-zinc-400">{s.sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Credit balance + Usage breakdown */}
+      {/* Support Tickets */}
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-zinc-900">Support Tickets</p>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500">
+              {tickets.length}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex gap-1 px-5 py-3 border-b border-zinc-100 overflow-x-auto">
+          {TICKET_FILTERS.map((f) => {
+            const count = f.id === "all" ? tickets.length : tickets.filter((t) => t.status === f.id).length;
+            return (
+              <button
+                key={f.id}
+                onClick={() => setTicketFilter(f.id)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex-shrink-0 ${
+                  ticketFilter === f.id
+                    ? "bg-zinc-900 text-white"
+                    : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
+                }`}
+              >
+                {f.label}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
+                  ticketFilter === f.id ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-400"
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {filteredTickets.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-zinc-400">
+            {tickets.length === 0 ? "No tickets yet." : "No tickets match this filter."}
+          </div>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {filteredTickets.map((ticket) => {
+              const tst      = TICKET_STATUS_CFG[ticket.status];
+              const waitMs   = Date.now() - new Date(ticket.created_at).getTime();
+              const waitHrs  = Math.floor(waitMs / 3600000);
+              const waitDays = Math.floor(waitMs / 86400000);
+              const waitLabel = waitDays > 0 ? `${waitDays}d` : waitHrs > 0 ? `${waitHrs}h` : "< 1h";
+              const isOverdue = ticket.status !== "resolved" && waitMs > 86400000;
+              return (
+                <button
+                  key={ticket.id}
+                  onClick={() => { setSelectedTicket(ticket); setReplyText(""); }}
+                  className="w-full text-left px-5 py-4 hover:bg-zinc-50 transition-colors flex items-start gap-3.5 group"
+                >
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${PRIORITY_DOT[ticket.priority]}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-0.5">
+                      <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.company_name}</p>
+                      <span className="text-[11px] text-zinc-400 flex-shrink-0">{timeAgo(ticket.created_at)}</span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mb-1">{ticket.email}</p>
+                    <p className="text-xs text-zinc-500 truncate mb-2">{ticket.description}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded capitalize">
+                        {ticket.issue_category}
+                      </span>
+                      <SourceIcon source={ticket.source} size={14} />
+                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${tst.badge}`}>
+                        <span className={`w-1 h-1 rounded-full flex-shrink-0 ${tst.dot}`} />
+                        {tst.label}
+                      </span>
+                      {ticket.status !== "resolved" && (
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${isOverdue ? "bg-red-50 text-red-600" : "bg-zinc-50 text-zinc-500"}`}>
+                          {isOverdue ? "⚠ " : ""}{waitLabel} waiting
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300 group-hover:text-zinc-400 flex-shrink-0 mt-1 transition-colors">
+                    <path d="M9 18l6-6-6-6" />
+                  </svg>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Integrations */}
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
+        <div className="px-5 py-4 border-b border-zinc-100">
+          <p className="text-sm font-semibold text-zinc-900">Integrations</p>
+          <p className="text-xs text-zinc-400 mt-0.5">Connected channels for {company.name}.</p>
+        </div>
+        <div className="divide-y divide-zinc-100">
+          {INT_CHANNELS.map((ch) => {
+            const row       = integrations.find((i) => i.channel === ch.id && i.status === "connected");
+            const connected = !!row;
+            return (
+              <div key={ch.id} className="flex items-center gap-3.5 px-5 py-3.5">
+                <SourceIconRaw source={ch.id} size={20} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-zinc-900">{ch.name}</p>
+                  {connected && (
+                    <p className="text-xs text-zinc-400 mt-0.5">via OAuth</p>
+                  )}
+                </div>
+                {connected ? (
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                      Connected
+                    </span>
+                    <button
+                      onClick={() => handleIntDisconnect(ch.id)}
+                      className="text-xs font-medium text-zinc-400 hover:text-zinc-700 border border-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-50 transition-colors"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-[11px] text-zinc-400">Not connected</span>
+                    <button
+                      onClick={() => setModalIntChannel(ch.id)}
+                      className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      Connect
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Credits & Billing */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
+        {[
+          { label: "Credits used",      value: company.credits_used.toLocaleString(), sub: "This period",                              color: undefined },
+          { label: "Credits remaining", value: creditsRemaining.toLocaleString(),     sub: `of ${company.credits.toLocaleString()} total`, color: creditsRemaining < 100 ? "text-amber-500" : undefined },
+          { label: "Plan",              value: planPrice(company.credits),             sub: `${company.credits.toLocaleString()} credits`, color: undefined },
+          { label: "Invoices",          value: invoices.length.toString(),             sub: `${invoices.filter((i) => i.status === "paid").length} paid`, color: undefined },
+        ].map((s) => (
+          <div key={s.label} className="bg-white rounded-xl border border-zinc-200 p-4 sm:p-5">
+            <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{s.label}</p>
+            <p className={`text-xl sm:text-2xl font-black leading-none tabular-nums mb-1 ${s.color ?? "text-zinc-900"}`}>{s.value}</p>
+            <p className="text-xs text-zinc-400">{s.sub}</p>
+          </div>
+        ))}
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 mb-5">
         <div className="bg-white rounded-xl border border-zinc-200 p-5 sm:p-6">
           <p className="text-sm font-semibold text-zinc-900 mb-4">Credit balance</p>
@@ -721,7 +881,6 @@ export default function CompanyDetailPage() {
         </div>
       </div>
 
-      {/* Invoices + Activity */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5 mb-5">
         <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
@@ -770,138 +929,6 @@ export default function CompanyDetailPage() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Integrations */}
-      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
-        <div className="px-5 py-4 border-b border-zinc-100">
-          <p className="text-sm font-semibold text-zinc-900">Integrations</p>
-          <p className="text-xs text-zinc-400 mt-0.5">Connect channels for {company.name}.</p>
-        </div>
-        <div className="divide-y divide-zinc-100">
-          {INT_CHANNELS.map((ch) => {
-            const row       = integrations.find((i) => i.channel === ch.id && i.status === "connected");
-            const connected = !!row;
-            return (
-              <div key={ch.id} className="flex items-center gap-3.5 px-5 py-3.5">
-                <SourceIconRaw source={ch.id} size={20} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-zinc-900">{ch.name}</p>
-                  {connected && (
-                    <p className="text-xs text-zinc-400 mt-0.5">via OAuth</p>
-                  )}
-                </div>
-
-                {ch.comingSoon ? (
-                  <span className="text-[10px] font-semibold tracking-wider uppercase bg-zinc-100 text-zinc-400 px-2 py-1 rounded-md flex-shrink-0">
-                    Soon
-                  </span>
-                ) : connected ? (
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
-                      Connected
-                    </span>
-                    <button
-                      onClick={() => handleIntDisconnect(ch.id)}
-                      className="text-xs font-medium text-zinc-400 hover:text-zinc-700 border border-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-50 transition-colors"
-                    >
-                      Disconnect
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-[11px] text-zinc-400">Not connected</span>
-                    <button
-                      onClick={() => setModalIntChannel(ch.id)}
-                      className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
-                    >
-                      Connect
-                    </button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Support Tickets */}
-      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-zinc-900">Support Tickets</p>
-            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-500">
-              {tickets.length}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex gap-1 px-5 py-3 border-b border-zinc-100 overflow-x-auto">
-          {TICKET_FILTERS.map((f) => {
-            const count = f.id === "all" ? tickets.length : tickets.filter((t) => t.status === f.id).length;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setTicketFilter(f.id)}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all flex-shrink-0 ${
-                  ticketFilter === f.id
-                    ? "bg-zinc-900 text-white"
-                    : "text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100"
-                }`}
-              >
-                {f.label}
-                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${
-                  ticketFilter === f.id ? "bg-white/20 text-white" : "bg-zinc-100 text-zinc-400"
-                }`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {filteredTickets.length === 0 ? (
-          <div className="px-5 py-8 text-center text-sm text-zinc-400">
-            {tickets.length === 0 ? "No tickets yet." : "No tickets match this filter."}
-          </div>
-        ) : (
-          <div className="divide-y divide-zinc-100">
-            {filteredTickets.map((ticket) => {
-              const tst = TICKET_STATUS_CFG[ticket.status];
-              return (
-                <button
-                  key={ticket.id}
-                  onClick={() => { setSelectedTicket(ticket); setReplyText(""); }}
-                  className="w-full text-left px-5 py-4 hover:bg-zinc-50 transition-colors flex items-start gap-3.5 group"
-                >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${PRIORITY_DOT[ticket.priority]}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.company_name}</p>
-                      <span className="text-[11px] text-zinc-400 flex-shrink-0">{timeAgo(ticket.created_at)}</span>
-                    </div>
-                    <p className="text-xs text-zinc-400 mb-1">{ticket.email}</p>
-                    <p className="text-xs text-zinc-500 truncate mb-2">{ticket.description}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded capitalize">
-                        {ticket.issue_category}
-                      </span>
-                      <SourceIcon source={ticket.source} size={14} />
-                      <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${tst.badge}`}>
-                        <span className={`w-1 h-1 rounded-full flex-shrink-0 ${tst.dot}`} />
-                        {tst.label}
-                      </span>
-                    </div>
-                  </div>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300 group-hover:text-zinc-400 flex-shrink-0 mt-1 transition-colors">
-                    <path d="M9 18l6-6-6-6" />
-                  </svg>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
 
       {/* Danger zone */}
