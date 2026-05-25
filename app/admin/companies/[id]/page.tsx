@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/_lib/supabase";
+import SourceIcon from "@/app/_components/SourceIcon";
 import {
   getAdminInvoices, saveAdminInvoices, getActivityLogs, addActivityLog,
   AdminInvoice, ActivityLog, Plan, PLANS, nextInvoiceId, formatDate, timeAgo,
@@ -98,18 +99,6 @@ const TICKET_FILTERS: { id: TicketFilter; label: string }[] = [
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
-
-function sourceBadge(source: string | null): string {
-  const map: Record<string, string> = {
-    gmail:     "bg-indigo-50 text-indigo-600",
-    instagram: "bg-pink-50 text-pink-600",
-    shopify:   "bg-emerald-50 text-emerald-700",
-    slack:     "bg-violet-50 text-violet-600",
-    hubspot:   "bg-orange-50 text-orange-600",
-    web:       "bg-zinc-100 text-zinc-500",
-  };
-  return map[(source ?? "web").toLowerCase()] ?? "bg-zinc-100 text-zinc-500";
-}
 
 function planPrice(credits: number): string {
   if (credits >= 10000) return "$499/mo";
@@ -348,11 +337,7 @@ export default function CompanyDetailPage() {
               }`}>
                 {selectedTicket.priority}
               </span>
-              {selectedTicket.source && (
-                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${sourceBadge(selectedTicket.source)}`}>
-                  {selectedTicket.source}
-                </span>
-              )}
+              <SourceIcon source={selectedTicket.source} size={18} />
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${st.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                 {st.label}
@@ -697,11 +682,7 @@ export default function CompanyDetailPage() {
                       <span className="text-[11px] font-medium text-zinc-400 bg-zinc-50 px-2 py-0.5 rounded capitalize">
                         {ticket.issue_category}
                       </span>
-                      {ticket.source && (
-                        <span className={`text-[11px] font-medium capitalize px-2 py-0.5 rounded ${sourceBadge(ticket.source)}`}>
-                          {ticket.source}
-                        </span>
-                      )}
+                      <SourceIcon source={ticket.source} size={14} />
                       <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${tst.badge}`}>
                         <span className={`w-1 h-1 rounded-full flex-shrink-0 ${tst.dot}`} />
                         {tst.label}
