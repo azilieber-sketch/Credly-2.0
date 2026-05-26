@@ -73,8 +73,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       setEmail(session.user.email ?? null);
       setReady(true);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) router.replace("/");
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") router.replace("/");
     });
     return () => subscription.unsubscribe();
   }, [router]);
