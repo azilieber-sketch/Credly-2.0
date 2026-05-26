@@ -67,15 +67,29 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   useEffect(() => {
     if (!supabase) { router.replace("/"); return; }
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) { router.replace("/"); return; }
-      if (session.user.email === "admin@credly.com") { router.replace("/admin"); return; }
-      setEmail(session.user.email ?? null);
+
+    let settled = false;
+
+    const resolve = (email: string | null | undefined) => {
+      if (settled) return;
+      settled = true;
+      if (!email) { router.replace("/"); return; }
+      if (email === "admin@credly.com") { router.replace("/admin"); return; }
+      setEmail(email);
       setReady(true);
+    };
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => resolve(session?.user.email))
+      .catch(() => { if (!settled) { settled = true; router.replace("/"); } });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") { router.replace("/"); return; }
+      if (!settled && (event === "INITIAL_SESSION" || event === "SIGNED_IN")) {
+        resolve(session?.user.email);
+      }
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_OUT") router.replace("/");
-    });
+
     return () => subscription.unsubscribe();
   }, [router]);
 
