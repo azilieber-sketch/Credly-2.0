@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "@/app/_lib/supabase";
+import { usePathname } from "next/navigation";
 import NotificationBell from "@/app/_components/NotificationBell";
 
 const NAV = [
@@ -95,45 +94,8 @@ const NAV = [
 const COMING_SOON = ["Agents", "Workflows"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const router   = useRouter();
   const pathname = usePathname();
-  const [email,   setEmail]   = useState<string | null>(null);
-  const [ready,   setReady]   = useState(false);
   const [navOpen, setNavOpen] = useState(false);
-
-  useEffect(() => {
-    if (!supabase) {
-      router.replace("/");
-      return;
-    }
-    supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => {
-        const userEmail = session?.user?.email ?? null;
-        if (userEmail === "admin@credly.com") {
-          setEmail(userEmail);
-          setReady(true);
-        } else {
-          router.replace("/");
-        }
-      })
-      .catch(() => router.replace("/"));
-  }, [router]);
-
-  useEffect(() => { setNavOpen(false); }, [pathname]);
-
-  const logout = async () => {
-    if (supabase) await supabase.auth.signOut();
-    router.push("/");
-  };
-
-  if (!ready) {
-    return (
-      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden">
@@ -188,18 +150,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               Admin
             </span>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="hidden md:block">
-              <NotificationBell />
-            </div>
-            <button
-              className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 text-xl leading-none transition-colors"
-              onClick={() => setNavOpen(false)}
-              aria-label="Close navigation"
-            >
-              ×
-            </button>
+          <div className="hidden md:block">
+            <NotificationBell />
           </div>
+          <button
+            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 text-xl leading-none transition-colors"
+            onClick={() => setNavOpen(false)}
+            aria-label="Close navigation"
+          >
+            ×
+          </button>
         </div>
 
         {/* Nav */}
@@ -250,18 +210,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Footer */}
         <div className="px-2 py-3 border-t border-zinc-800 flex-shrink-0">
-          {email && (
-            <p className="text-[11px] text-zinc-600 px-2.5 mb-1.5 truncate">{email}</p>
-          )}
-          <button
-            onClick={logout}
-            className="w-full flex items-center gap-2.5 px-2.5 py-3 md:py-2 rounded-lg text-[13px] font-medium text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition-all text-left"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-            </svg>
-            Log out
-          </button>
+          <p className="text-[11px] text-zinc-600 px-2.5 mb-1.5 truncate">admin@credly.com</p>
         </div>
       </aside>
 
