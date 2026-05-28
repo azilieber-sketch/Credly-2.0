@@ -102,37 +102,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [navOpen, setNavOpen] = useState(false);
 
   useEffect(() => {
-    if (!supabase) { router.replace("/"); return; }
-
-    let settled = false;
-
-    const resolve = (email: string | null | undefined) => {
-      if (settled) return;
-      settled = true;
-      if (!email) { router.replace("/"); return; }
-      if (email !== "admin@credly.com") { router.replace("/dashboard"); return; }
-      setEmail(email);
-      setReady(true);
-    };
-
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => resolve(session?.user.email))
-      .catch(() => { if (!settled) { settled = true; router.replace("/"); } });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") { router.replace("/"); return; }
-      if (!settled && (event === "INITIAL_SESSION" || event === "SIGNED_IN")) {
-        resolve(session?.user.email);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    if (!supabase) {
+      router.replace("/");
+      return;
+    }
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        const userEmail = session?.user?.email ?? null;
+        if (userEmail === "admin@credly.com") {
+          setEmail(userEmail);
+          setReady(true);
+        } else {
+          router.replace("/");
+        }
+      })
+      .catch(() => router.replace("/"));
   }, [router]);
 
   useEffect(() => { setNavOpen(false); }, [pathname]);
 
   const logout = async () => {
-    await supabase!.auth.signOut();
+    if (supabase) await supabase.auth.signOut();
     router.push("/");
   };
 
