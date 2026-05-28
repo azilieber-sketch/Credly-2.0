@@ -95,7 +95,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-zinc-200 overflow-hidden z-50">
+        <div className="absolute left-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-zinc-200 overflow-hidden z-50">
           <div className="px-4 py-3 border-b border-zinc-100 flex items-center justify-between">
             <p className="text-sm font-semibold text-zinc-900">Recent tickets</p>
             <button
