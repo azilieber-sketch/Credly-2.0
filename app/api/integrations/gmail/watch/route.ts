@@ -1,11 +1,13 @@
+// This cron renews Gmail push watch subscriptions before they expire (7-day TTL).
+// Email ingestion is handled in real-time by /api/integrations/gmail/push via Pub/Sub.
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/app/_lib/supabase-server";
-import {
-  GmailCredentials,
-  getValidAccessToken,
-  extractEmailBody,
-  getHeader,
-} from "@/app/_lib/gmail";
+import { GmailCredentials, getValidAccessToken } from "@/app/_lib/gmail";
+
+const TOPIC = "projects/spheric-algebra-497814-d9/topics/gmail-notifications";
+
+// Renew when fewer than 24 hours remain on the watch
+const RENEW_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 export async function GET(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
@@ -21,16 +23,19 @@ export async function GET(req: NextRequest) {
     .eq("channel", "gmail")
     .eq("status", "connected");
 
-  if (!integrations?.length) return NextResponse.json({ processed: 0 });
+  if (!integrations?.length) return NextResponse.json({ renewed: 0 });
 
-  let totalCreated = 0;
+  let renewed = 0;
 
   for (const integration of integrations) {
     const companyId  = integration.company_id as string;
     const credentials = integration.credentials as GmailCredentials;
 
     try {
-      if (!credentials.history_id) continue;
+      // Check if watch is expiring soon (or has no recorded expiry)
+      const expiry    = credentials.watch_expiry ? parseInt(credentials.watch_expiry) : 0;
+      const expiresIn = expiry - Date.now();
+      if (expiresIn > RENEW_THRESHOLD_MS) continue;
 
       const accessToken = await getValidAccessToken(credentials, async (updated) => {
         await supabase.from("integrations").upsert(
@@ -39,113 +44,41 @@ export async function GET(req: NextRequest) {
         );
       });
 
-      // Fetch Gmail history since last check
-      const histRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/history?startHistoryId=${credentials.history_id}&historyTypes=messageAdded&labelId=INBOX`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
+      const watchRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/watch", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ topicName: TOPIC, labelIds: ["INBOX"] }),
+      });
 
-      // historyId expired — grab a fresh one and skip this cycle
-      if (histRes.status === 404) {
-        const profileRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
-          headers: { Authorization: `Bearer ${accessToken}` },
-        });
-        const profile = await profileRes.json();
-        await supabase.from("integrations").upsert(
-          {
-            company_id: companyId,
-            channel: "gmail",
-            status: "connected",
-            credentials: { ...credentials, history_id: String(profile.historyId) },
-          },
-          { onConflict: "company_id,channel" }
-        );
+      const watchData = await watchRes.json();
+      if (!watchData.expiration) {
+        console.error(`Watch renewal failed for ${companyId}:`, watchData);
         continue;
       }
 
-      const histData = await histRes.json();
-
-      // Always advance the stored historyId
-      const newHistoryId: string = histData.historyId
-        ? String(histData.historyId)
-        : credentials.history_id;
-
-      if (!histData.history?.length) {
-        if (newHistoryId !== credentials.history_id) {
-          await supabase.from("integrations").upsert(
-            {
-              company_id: companyId,
-              channel: "gmail",
-              status: "connected",
-              credentials: { ...credentials, history_id: newHistoryId },
-            },
-            { onConflict: "company_id,channel" }
-          );
-        }
-        continue;
-      }
-
-      // Collect newly added message IDs
-      const newMessageIds: string[] = (
-        histData.history as Array<{
-          messagesAdded?: Array<{ message: { id: string } }>;
-        }>
-      ).flatMap((h) => h.messagesAdded?.map((m) => m.message.id) ?? []);
-
-      // Look up company name once
-      const { data: company } = await supabase
-        .from("companies")
-        .select("name")
-        .eq("id", companyId)
-        .single();
-
-      for (const msgId of newMessageIds) {
-        const msgRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const msg = await msgRes.json();
-
-        const headers = (msg.payload?.headers ?? []) as Array<{ name: string; value: string }>;
-        const from    = getHeader(headers, "From");
-        const subject = getHeader(headers, "Subject") || "(no subject)";
-
-        // Skip outbound messages sent from the connected account
-        if (from.includes(credentials.email)) continue;
-
-        const senderEmail = from.match(/<(.+?)>/)?.[1] ?? from.trim();
-        const body        = extractEmailBody(msg.payload ?? {});
-        const receivedAt  = new Date(parseInt(msg.internalDate)).toISOString();
-
-        await supabase.from("tickets").insert({
-          company_id:     companyId,
-          company_name:   company?.name ?? "",
-          email:          senderEmail,
-          issue_category: "general",
-          priority:       "medium",
-          description:    `Subject: ${subject}\n\n${body}`.trim(),
-          status:         "open",
-          source:         "gmail",
-          created_at:     receivedAt,
-        });
-
-        totalCreated++;
-      }
-
-      // Advance historyId
       await supabase.from("integrations").upsert(
         {
           company_id: companyId,
           channel: "gmail",
           status: "connected",
-          credentials: { ...credentials, history_id: newHistoryId },
+          credentials: {
+            ...credentials,
+            watch_expiry: String(watchData.expiration),
+            // Update historyId from the fresh watch response so push stays in sync
+            history_id: watchData.historyId ? String(watchData.historyId) : credentials.history_id,
+          },
         },
         { onConflict: "company_id,channel" }
       );
+
+      renewed++;
     } catch (err) {
-      console.error(`Gmail watch error for company ${companyId}:`, err);
+      console.error(`Watch renewal error for company ${companyId}:`, err);
     }
   }
 
-  return NextResponse.json({ processed: totalCreated });
+  return NextResponse.json({ renewed });
 }

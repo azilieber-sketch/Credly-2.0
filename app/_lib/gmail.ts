@@ -4,6 +4,7 @@ export interface GmailCredentials {
   email: string;
   token_expiry?: string;
   history_id?: string;
+  watch_expiry?: string; // Unix ms string — Gmail watch expires every 7 days
 }
 
 interface GmailPayload {

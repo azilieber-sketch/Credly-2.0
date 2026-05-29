@@ -38,13 +38,37 @@ export async function GET(req: NextRequest) {
   const profile = await profileRes.json();
   if (!profile.emailAddress) return NextResponse.redirect(failUrl);
 
-  const credentials = {
+  // Register Gmail push watch — tells Gmail to publish to our Pub/Sub topic on new mail.
+  // Watch expires after 7 days; the cron at /api/integrations/gmail/watch renews it.
+  const watchRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/watch", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${tokens.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      topicName: "projects/spheric-algebra-497814-d9/topics/gmail-notifications",
+      labelIds: ["INBOX"],
+    }),
+  });
+  const watchData = await watchRes.json();
+
+  // Prefer the historyId from watch() — it's the correct starting point for push notifications.
+  // Fall back to profile.historyId if watch() failed.
+  const historyId = watchData.historyId
+    ? String(watchData.historyId)
+    : String(profile.historyId);
+
+  const credentials: Record<string, string> = {
     access_token:  tokens.access_token,
     refresh_token: tokens.refresh_token,
     email:         profile.emailAddress,
     token_expiry:  new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
-    history_id:    String(profile.historyId),
+    history_id:    historyId,
   };
+  if (watchData.expiration) {
+    credentials.watch_expiry = String(watchData.expiration);
+  }
 
   const supabase = getServiceSupabase();
   await supabase.from("integrations").upsert(
