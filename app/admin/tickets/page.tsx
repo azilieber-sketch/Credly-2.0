@@ -144,6 +144,15 @@ export default function AdminTicketsPage() {
   const handleSendReply = async () => {
     if (!replyText.trim() || !selected || !supabase) return;
     setSending(true);
+
+    if (selected.source === "gmail") {
+      await fetch("/api/integrations/gmail/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticket_id: selected.id, reply_text: replyText.trim() }),
+      }).catch(() => null);
+    }
+
     const now = new Date().toISOString();
     await supabase.from("tickets").update({
       reply: replyText.trim(), replied_at: now, status: "resolved",

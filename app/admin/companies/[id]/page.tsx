@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/_lib/supabase";
 import SourceIcon, { SourceIconRaw } from "@/app/_components/SourceIcon";
@@ -309,7 +309,15 @@ export default function CompanyDetailPage() {
   const [integrations,     setIntegrations]     = useState<Integration[]>([]);
   const [modalIntChannel,  setModalIntChannel]  = useState<string | null>(null);
 
+  const searchParams = useSearchParams();
+
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
+
+  useEffect(() => {
+    if (searchParams.get("gmail") === "connected") showToast("Gmail connected successfully");
+    if (searchParams.get("error") === "gmail_auth_failed") showToast("Gmail connection failed — please try again");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = useCallback(async () => {
     if (!supabase) { setLoading(false); return; }
@@ -393,6 +401,15 @@ export default function CompanyDetailPage() {
 
   const handleSendReply = async () => {
     if (!replyText.trim() || !selectedTicket || !supabase) return;
+
+    if (selectedTicket.source === "gmail") {
+      await fetch("/api/integrations/gmail/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticket_id: selectedTicket.id, reply_text: replyText.trim() }),
+      }).catch(() => null);
+    }
+
     const now = new Date().toISOString();
     await supabase.from("tickets").update({
       reply: replyText.trim(),
@@ -794,6 +811,9 @@ export default function CompanyDetailPage() {
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
                       Connected
                     </span>
+                    {ch.id === "gmail" && row.credentials.email && (
+                      <span className="text-[11px] text-zinc-400">{row.credentials.email}</span>
+                    )}
                     <button
                       onClick={() => handleIntDisconnect(ch.id)}
                       className="text-xs font-medium text-zinc-400 hover:text-zinc-700 border border-zinc-200 px-2.5 py-1 rounded-lg hover:bg-zinc-50 transition-colors"
@@ -805,7 +825,13 @@ export default function CompanyDetailPage() {
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-[11px] text-zinc-400">Not connected</span>
                     <button
-                      onClick={() => setModalIntChannel(ch.id)}
+                      onClick={() => {
+                        if (ch.id === "gmail") {
+                          window.location.href = `/api/integrations/gmail/auth?company_id=${id}`;
+                        } else {
+                          setModalIntChannel(ch.id);
+                        }
+                      }}
                       className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
                     >
                       Connect
