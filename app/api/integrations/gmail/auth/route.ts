@@ -7,10 +7,15 @@ const SCOPES = [
 ].join(" ");
 
 export async function GET(req: NextRequest) {
-  const companyId = req.nextUrl.searchParams.get("company_id");
-  if (!companyId) {
-    return NextResponse.json({ error: "Missing company_id" }, { status: 400 });
+  // Product surface passes workspace_id; legacy admin surface passes company_id.
+  const workspaceId = req.nextUrl.searchParams.get("workspace_id");
+  const companyId   = req.nextUrl.searchParams.get("company_id");
+  if (!workspaceId && !companyId) {
+    return NextResponse.json({ error: "Missing workspace_id or company_id" }, { status: 400 });
   }
+
+  // Encode tenant type into state so the callback knows where to write + redirect.
+  const state = workspaceId ? `ws:${workspaceId}` : `co:${companyId}`;
 
   const redirectUri = `${req.nextUrl.origin}/api/integrations/gmail/callback`;
 
@@ -21,7 +26,7 @@ export async function GET(req: NextRequest) {
     scope: SCOPES,
     access_type: "offline",
     prompt: "consent",
-    state: companyId,
+    state,
   });
 
   return NextResponse.redirect(

@@ -12,38 +12,36 @@ export async function POST(req: NextRequest) {
 
   const { data: ticket } = await supabase
     .from("tickets")
-    .select("company_id, email, description")
+    .select("workspace_id, company_id, email")
     .eq("id", ticket_id)
     .single();
 
-  if (!ticket?.company_id) {
+  if (!ticket) {
     return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
   }
 
-  const { data: integration } = await supabase
+  // Find the connected Gmail integration for this ticket's workspace (preferred)
+  // or its legacy company.
+  let query = supabase
     .from("integrations")
-    .select("credentials")
-    .eq("company_id", ticket.company_id)
+    .select("id, credentials")
     .eq("channel", "gmail")
-    .eq("status", "connected")
-    .single();
+    .eq("status", "connected");
+
+  if (ticket.workspace_id)      query = query.eq("workspace_id", ticket.workspace_id);
+  else if (ticket.company_id)   query = query.eq("company_id", ticket.company_id);
+  else return NextResponse.json({ error: "No tenant on ticket" }, { status: 404 });
+
+  const { data: integration } = await query.single();
 
   if (!integration) {
-    return NextResponse.json({ error: "Gmail not connected for this company" }, { status: 404 });
+    return NextResponse.json({ error: "Gmail not connected for this workspace" }, { status: 404 });
   }
 
   const credentials = integration.credentials as GmailCredentials;
 
   const accessToken = await getValidAccessToken(credentials, async (updated) => {
-    await supabase.from("integrations").upsert(
-      {
-        company_id: ticket.company_id,
-        channel: "gmail",
-        status: "connected",
-        credentials: updated,
-      },
-      { onConflict: "company_id,channel" }
-    );
+    await supabase.from("integrations").update({ credentials: updated }).eq("id", integration.id);
   });
 
   await sendEmail(accessToken, ticket.email, "Re: Your Support Request", reply_text);

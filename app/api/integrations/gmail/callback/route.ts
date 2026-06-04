@@ -4,12 +4,20 @@ import { getServiceSupabase } from "@/app/_lib/supabase-server";
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = req.nextUrl;
   const code      = searchParams.get("code");
-  const companyId = searchParams.get("state");
+  const stateRaw  = searchParams.get("state") ?? "";
   const error     = searchParams.get("error");
 
-  const failUrl = `${origin}/admin/companies/${companyId ?? ""}?error=gmail_auth_failed`;
+  // state is "ws:<id>" (product) or "co:<id>" (legacy admin); bare value = company.
+  const sep      = stateRaw.indexOf(":");
+  const kind     = sep === -1 ? "co" : stateRaw.slice(0, sep);
+  const tenantId = sep === -1 ? stateRaw : stateRaw.slice(sep + 1);
+  const isWs     = kind === "ws";
 
-  if (error || !code || !companyId) {
+  const failUrl = isWs
+    ? `${origin}/integrations?error=gmail_auth_failed`
+    : `${origin}/admin/companies/${tenantId}?error=gmail_auth_failed`;
+
+  if (error || !code || !tenantId) {
     return NextResponse.redirect(failUrl);
   }
 
@@ -72,9 +80,18 @@ export async function GET(req: NextRequest) {
 
   const supabase = getServiceSupabase();
   await supabase.from("integrations").upsert(
-    { company_id: companyId, channel: "gmail", status: "connected", credentials },
-    { onConflict: "company_id,channel" }
+    {
+      [isWs ? "workspace_id" : "company_id"]: tenantId,
+      channel: "gmail",
+      status: "connected",
+      credentials,
+    },
+    { onConflict: isWs ? "workspace_id,channel" : "company_id,channel" }
   );
 
-  return NextResponse.redirect(`${origin}/admin/companies/${companyId}?gmail=connected`);
+  const successUrl = isWs
+    ? `${origin}/integrations?gmail=connected`
+    : `${origin}/admin/companies/${tenantId}?gmail=connected`;
+
+  return NextResponse.redirect(successUrl);
 }

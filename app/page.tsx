@@ -7,6 +7,7 @@ import { supabase } from "@/app/_lib/supabase";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ServiceItem = { icon: React.ReactNode; title: string; desc: string; badge?: string };
+type AuthMode = "signin" | "signup";
 
 // ─── Section Label ────────────────────────────────────────────────────────────
 
@@ -18,8 +19,8 @@ const SectionLabel = ({ children }: { children: string }) => (
 
 // ─── Auth Modal ───────────────────────────────────────────────────────────────
 
-const AuthModal = ({ onClose }: { onClose: () => void }) => {
-  const [mode,       setMode]       = useState<"signin" | "signup">("signin");
+const AuthModal = ({ onClose, initialMode }: { onClose: () => void; initialMode: AuthMode }) => {
+  const [mode,       setMode]       = useState<"signin" | "signup">(initialMode);
   const [email,      setEmail]      = useState("");
   const [password,   setPassword]   = useState("");
   const [error,      setError]      = useState<string | null>(null);
@@ -67,10 +68,16 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
           <span className="text-base font-bold text-gray-900">Credly</span>
           <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-2">Check your email</h2>
           <p className="text-stone-500 text-sm leading-relaxed">
-            We sent a confirmation link to{" "}
+            Email confirmation is on, so we sent a confirmation link to{" "}
             <span className="font-medium text-gray-900">{email}</span>.
             Click it to activate your account, then sign in.
           </p>
+          <button
+            onClick={() => { setCheckEmail(false); setMode("signin"); setPassword(""); }}
+            className="mt-6 w-full text-sm font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors"
+          >
+            Back to sign in
+          </button>
         </div>
       </div>
     );
@@ -184,7 +191,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 const NAV_IDS = ["home", "how-it-works", "features", "pricing", "faq"] as const;
 
-const Navbar = ({ onAuth }: { onAuth: () => void }) => {
+const Navbar = ({ onAuth }: { onAuth: (mode: AuthMode) => void }) => {
   const [active, setActive] = useState<string>("home");
 
   useEffect(() => {
@@ -224,13 +231,13 @@ const Navbar = ({ onAuth }: { onAuth: () => void }) => {
 
       <div className="flex items-center gap-3">
         <button
-          onClick={onAuth}
+          onClick={() => onAuth("signin")}
           className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors"
         >
           Sign in
         </button>
         <button
-          onClick={onAuth}
+          onClick={() => onAuth("signup")}
           className="text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all shadow-sm shadow-indigo-200/60"
         >
           Start free
@@ -315,7 +322,7 @@ const WorkflowPreview = () => (
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-const Hero = ({ onAuth }: { onAuth: () => void }) => (
+const Hero = ({ onAuth }: { onAuth: (mode: AuthMode) => void }) => (
   <section id="home" className="relative bg-stone-50 overflow-hidden min-h-[calc(100vh-73px)] flex items-center px-8 py-20 lg:py-0">
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(99,102,241,0.11),transparent)] pointer-events-none" />
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_90%_95%,rgba(251,191,36,0.09),transparent)] pointer-events-none" />
@@ -340,7 +347,7 @@ const Hero = ({ onAuth }: { onAuth: () => void }) => (
 
         <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={onAuth}
+            onClick={() => onAuth("signup")}
             className="inline-flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-base font-semibold px-7 py-3.5 rounded-xl hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all shadow-md shadow-indigo-300/30"
           >
             Start free
@@ -694,7 +701,7 @@ const Check = ({ light }: { light: boolean }) => (
   </svg>
 );
 
-const Pricing = ({ onAuth }: { onAuth: () => void }) => (
+const Pricing = ({ onAuth }: { onAuth: (mode: AuthMode) => void }) => (
   <section id="pricing" className="bg-stone-50 py-28 px-8">
     <div className="max-w-7xl mx-auto">
       <div className="text-center mb-16">
@@ -753,7 +760,7 @@ const Pricing = ({ onAuth }: { onAuth: () => void }) => (
             </ul>
 
             <button
-              onClick={onAuth}
+              onClick={() => onAuth("signup")}
               className={`w-full rounded-xl py-3 text-sm font-semibold transition-all active:scale-[0.98] ${
                 p.highlight
                   ? "bg-white text-indigo-600 hover:bg-stone-50"
@@ -841,7 +848,7 @@ const FAQ = () => {
 
 // ─── Final CTA ────────────────────────────────────────────────────────────────
 
-const FinalCTA = ({ onAuth }: { onAuth: () => void }) => (
+const FinalCTA = ({ onAuth }: { onAuth: (mode: AuthMode) => void }) => (
   <section className="bg-white py-28 px-8">
     <div className="max-w-3xl mx-auto text-center">
       <SectionLabel>Get started</SectionLabel>
@@ -853,13 +860,13 @@ const FinalCTA = ({ onAuth }: { onAuth: () => void }) => (
       </p>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <button
-          onClick={onAuth}
+          onClick={() => onAuth("signup")}
           className="inline-flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-base font-semibold px-8 py-3.5 rounded-xl hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all shadow-md shadow-indigo-300/30"
         >
           Start free — no credit card required
         </button>
         <button
-          onClick={onAuth}
+          onClick={() => onAuth("signin")}
           className="inline-flex items-center justify-center text-stone-600 text-base font-medium px-8 py-3.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all"
         >
           Talk to our team
@@ -899,11 +906,12 @@ const Footer = () => (
 
 export default function Home() {
   const [authOpen, setAuthOpen] = useState(false);
-  const openAuth = () => setAuthOpen(true);
+  const [authMode, setAuthMode] = useState<AuthMode>("signup");
+  const openAuth = (mode: AuthMode) => { setAuthMode(mode); setAuthOpen(true); };
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
+      {authOpen && <AuthModal initialMode={authMode} onClose={() => setAuthOpen(false)} />}
       <Navbar onAuth={openAuth} />
       <Hero onAuth={openAuth} />
       <TrustBar />
