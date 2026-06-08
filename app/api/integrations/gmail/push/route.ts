@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   // Find the integration whose connected Gmail matches this notification
   const { data: allIntegrations } = await supabase
     .from("integrations")
-    .select("company_id, workspace_id, credentials")
+    .select("company_id, credentials")
     .eq("channel", "gmail")
     .eq("status", "connected");
 
@@ -47,8 +47,7 @@ export async function POST(req: NextRequest) {
 
   if (!integration) return ack("unknown gmail account");
 
-  const companyId   = integration.company_id as string | null;
-  const workspaceId = integration.workspace_id as string | null;
+  const companyId   = integration.company_id as string;
   const credentials = integration.credentials as GmailCredentials;
 
   try {
@@ -112,7 +111,7 @@ export async function POST(req: NextRequest) {
     const { data: company } = await supabase
       .from("companies")
       .select("name")
-      .eq("id", companyId ?? "")
+      .eq("id", companyId)
       .single();
 
     for (const msgId of newMessageIds) {
@@ -131,41 +130,20 @@ export async function POST(req: NextRequest) {
       if (from.includes(credentials.email)) continue;
 
       const senderEmail = from.match(/<(.+?)>/)?.[1] ?? from.trim();
-      const senderName  = from.replace(/<[^>]*>/, "").trim().replace(/^"|"$/g, "") || senderEmail;
       const bodyText    = extractEmailBody(msg.payload ?? {});
       const receivedAt  = new Date(parseInt(msg.internalDate)).toISOString();
-      const fullBody    = `Subject: ${subject}\n\n${bodyText}`.trim();
 
-      const { data: newTicket } = await supabase
-        .from("tickets")
-        .insert({
-          company_id:     companyId,
-          workspace_id:   workspaceId,
-          company_name:   senderName || company?.name || "",
-          email:          senderEmail,
-          issue_category: "general",
-          priority:       "medium",
-          description:    fullBody,
-          status:         "open",
-          source:         "gmail",
-          created_at:     receivedAt,
-        })
-        .select("id")
-        .single();
-
-      // Mirror the inbound email as the opening customer message in the thread.
-      if (newTicket && workspaceId) {
-        await supabase.from("messages").insert({
-          ticket_id:    newTicket.id,
-          workspace_id: workspaceId,
-          sender_type:  "customer",
-          sender_name:  senderName,
-          sender_email: senderEmail,
-          body:         fullBody,
-          channel:      "gmail",
-          created_at:   receivedAt,
-        });
-      }
+      await supabase.from("tickets").insert({
+        company_id:     companyId,
+        company_name:   company?.name ?? "",
+        email:          senderEmail,
+        issue_category: "general",
+        priority:       "medium",
+        description:    `Subject: ${subject}\n\n${bodyText}`.trim(),
+        status:         "open",
+        source:         "gmail",
+        created_at:     receivedAt,
+      });
     }
 
     // Advance the stored historyId so the next notification doesn't reprocess these messages

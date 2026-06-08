@@ -86,7 +86,7 @@ export default function Sidebar({
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
-                className={`flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-xl text-sm transition-all active:scale-[0.98] ${
+                className={`flex items-center gap-3 px-3 py-3 md:py-2.5 rounded-xl text-sm transition-all ${
                   isActive
                     ? "bg-indigo-50 text-indigo-700 font-semibold ring-1 ring-indigo-100/80"
                     : "font-medium text-stone-500 hover:bg-stone-50 hover:text-stone-800"

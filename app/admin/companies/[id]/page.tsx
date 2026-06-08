@@ -171,9 +171,91 @@ function buildAIDraft(ticket: Ticket): string {
 
 // ── IntConnectModal ────────────────────────────────────────────────────────────
 
-// IntConnectModal removed: it faked a connected state by writing
-// { method: "oauth" } credentials, which silently corrupted Gmail. Real channel
-// connection now lives in the product Integrations panel (real OAuth only).
+function IntConnectModal({
+  config,
+  companyName,
+  onClose,
+  onSave,
+}: {
+  config: IntChannelConfig;
+  companyName: string;
+  onClose: () => void;
+  onSave: () => Promise<void>;
+}) {
+  const [connecting, setConnecting] = useState(false);
+  const [done,       setDone]       = useState(false);
+
+  const handleConnect = async () => {
+    if (connecting || done) return;
+    setConnecting(true);
+    await new Promise((r) => setTimeout(r, 1200));
+    await onSave();
+    setDone(true);
+    setConnecting(false);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 sm:p-7"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sm:hidden w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5" />
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2.5">
+            <SourceIconRaw source={config.id} size={22} />
+            <h2 className="text-base font-bold text-zinc-900">Connect {config.name}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 text-xl transition-colors"
+          >
+            ×
+          </button>
+        </div>
+        <p className="text-sm text-zinc-500 mt-1 mb-5">
+          For <span className="font-medium text-zinc-700">{companyName}</span> · via {config.provider} OAuth
+        </p>
+
+        <p className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Permissions requested</p>
+        <ul className="flex flex-col gap-2 mb-6">
+          {config.permissions.map((perm) => (
+            <li key={perm} className="flex items-start gap-2 text-sm text-zinc-600">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-emerald-500 mt-0.5 flex-shrink-0">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              {perm}
+            </li>
+          ))}
+        </ul>
+
+        <button
+          onClick={handleConnect}
+          disabled={connecting || done}
+          className={`w-full text-sm font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${config.btnClass} disabled:opacity-60 disabled:cursor-not-allowed`}
+        >
+          {connecting ? (
+            <>
+              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin opacity-70" />
+              Connecting…
+            </>
+          ) : done ? (
+            "Connected!"
+          ) : (
+            `Continue with ${config.provider}`
+          )}
+        </button>
+
+        <p className="text-[11px] text-zinc-400 text-center mt-3">
+          You&apos;ll be redirected to {config.provider} to authorize access.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 // ── PlanModal ──────────────────────────────────────────────────────────────────
 
@@ -225,6 +307,7 @@ export default function CompanyDetailPage() {
   const [replyText,      setReplyText]      = useState("");
   const [suggesting,     setSuggesting]     = useState(false);
   const [integrations,     setIntegrations]     = useState<Integration[]>([]);
+  const [modalIntChannel,  setModalIntChannel]  = useState<string | null>(null);
 
   const searchParams = useSearchParams();
 
@@ -347,6 +430,17 @@ export default function CompanyDetailPage() {
       setReplyText(buildAIDraft(selectedTicket));
       setSuggesting(false);
     }, 1400);
+  };
+
+  const handleIntConnect = async (channelId: string) => {
+    if (!supabase) return;
+    await supabase.from("integrations").upsert(
+      { company_id: id, channel: channelId, status: "connected", credentials: { method: "oauth" } },
+      { onConflict: "company_id,channel" }
+    );
+    setModalIntChannel(null);
+    await load();
+    showToast(`${INT_CHANNELS.find((c) => c.id === channelId)?.name} connected`);
   };
 
   const handleIntDisconnect = async (channelId: string) => {
@@ -526,6 +620,18 @@ export default function CompanyDetailPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
       {modal === "credits" && <PlanModal company={company} onClose={() => setModal(null)} onDone={handleIssueCredits} />}
+
+      {modalIntChannel && (() => {
+        const cfg = INT_CHANNELS.find((c) => c.id === modalIntChannel);
+        return cfg ? (
+          <IntConnectModal
+            config={cfg}
+            companyName={company.name}
+            onClose={() => setModalIntChannel(null)}
+            onSave={() => handleIntConnect(modalIntChannel)}
+          />
+        ) : null;
+      })()}
 
       {toast && (
         <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 bg-zinc-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
@@ -718,18 +824,18 @@ export default function CompanyDetailPage() {
                 ) : (
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-[11px] text-zinc-400">Not connected</span>
-                    {ch.id === "gmail" ? (
-                      <button
-                        onClick={() => { window.location.href = `/api/integrations/gmail/auth?company_id=${id}`; }}
-                        className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
-                      >
-                        Connect
-                      </button>
-                    ) : (
-                      <span className="text-[10px] font-semibold tracking-wider uppercase bg-zinc-100 text-zinc-400 px-2 py-0.5 rounded-md">
-                        Soon
-                      </span>
-                    )}
+                    <button
+                      onClick={() => {
+                        if (ch.id === "gmail") {
+                          window.location.href = `/api/integrations/gmail/auth?company_id=${id}`;
+                        } else {
+                          setModalIntChannel(ch.id);
+                        }
+                      }}
+                      className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
+                      Connect
+                    </button>
                   </div>
                 )}
               </div>

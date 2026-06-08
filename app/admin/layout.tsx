@@ -177,7 +177,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-2.5 px-2.5 py-3 md:py-2 rounded-lg text-[13px] font-medium transition-all active:scale-[0.98] ${
+                className={`flex items-center gap-2.5 px-2.5 py-3 md:py-2 rounded-lg text-[13px] font-medium transition-all ${
                   isActive
                     ? "bg-zinc-800 text-white"
                     : "text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200"
