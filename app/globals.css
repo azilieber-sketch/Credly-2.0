@@ -27,3 +27,33 @@ body {
   background: rgba(99, 102, 241, 0.15);
   color: #1e1b4b;
 }
+
+/* Interaction feel: make clickable things show the hand cursor, and
+   disabled things show the blocked cursor. Design-neutral. */
+@layer base {
+  button,
+  a[href],
+  label[for],
+  summary,
+  select,
+  [role="button"],
+  [role="tab"],
+  [role="link"],
+  [role="menuitem"],
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  textarea:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}

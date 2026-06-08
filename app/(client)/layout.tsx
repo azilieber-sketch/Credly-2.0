@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar, { NavItem } from "@/app/_components/Sidebar";
 import { supabase } from "@/app/_lib/supabase";
@@ -58,12 +58,89 @@ const NAV: NavItem[] = [
   },
 ];
 
+function PendingScreen({
+  email,
+  onLogout,
+  onRefresh,
+}: {
+  email: string | null;
+  onLogout: () => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
+      <div className="bg-white rounded-3xl shadow-sm border border-stone-100 max-w-md w-full p-8 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-5">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M12 7v5l3 2" />
+          </svg>
+        </div>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">Your account is pending approval</h1>
+        <p className="text-sm text-stone-500 leading-relaxed mb-1">
+          Thanks for signing up
+          {email && (
+            <>
+              {", "}
+              <span className="font-medium text-gray-900">{email}</span>
+            </>
+          )}
+          .
+        </p>
+        <p className="text-sm text-stone-500 leading-relaxed mb-7">
+          Our team is reviewing your account. You&apos;ll get access to your dashboard
+          as soon as it&apos;s approved.
+        </p>
+        <div className="flex flex-col gap-2.5">
+          <button
+            onClick={onRefresh}
+            className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all"
+          >
+            Check again
+          </button>
+          <button
+            onClick={onLogout}
+            className="w-full text-stone-500 font-medium rounded-2xl px-4 py-3 text-sm hover:bg-stone-50 transition-colors"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const pathname = usePathname();
   const [email,   setEmail]   = useState<string | null>(null);
   const [ready,   setReady]   = useState(false);
+  const [gate,    setGate]    = useState<"loading" | "pending" | "ok">("loading");
   const [navOpen, setNavOpen] = useState(false);
+
+  // Resolve the signed-in user's company and decide whether they see the portal.
+  // A brand-new signup has no company yet (or a 'pending' one) → they wait for
+  // admin approval. Creates the pending row if it's missing so every signup
+  // shows up in the admin list (covers OAuth / email-confirmation signups too).
+  const loadCompany = useCallback(async (userEmail: string) => {
+    if (!supabase) return;
+    setGate("loading");
+    const { data } = await supabase
+      .from("companies")
+      .select("status")
+      .eq("email", userEmail)
+      .maybeSingle();
+    if (!data) {
+      await supabase.from("companies").insert({
+        name: userEmail.split("@")[0],
+        email: userEmail,
+        status: "pending",
+      });
+      setGate("pending");
+      return;
+    }
+    setGate(data.status === "pending" ? "pending" : "ok");
+  }, []);
 
   useEffect(() => {
     if (!supabase) { router.replace("/"); return; }
@@ -77,6 +154,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
       if (email === "admin@credly.com") { router.replace("/admin"); return; }
       setEmail(email);
       setReady(true);
+      loadCompany(email);
     };
 
     supabase.auth.getSession()
@@ -91,7 +169,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     });
 
     return () => subscription.unsubscribe();
-  }, [router]);
+  }, [router, loadCompany]);
 
   useEffect(() => { setNavOpen(false); }, [pathname]);
 
@@ -100,11 +178,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     router.push("/");
   };
 
-  if (!ready) {
+  if (!ready || gate === "loading") {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
         <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
       </div>
+    );
+  }
+
+  if (gate === "pending") {
+    return (
+      <PendingScreen
+        email={email}
+        onLogout={logout}
+        onRefresh={() => { if (email) loadCompany(email); }}
+      />
     );
   }
 

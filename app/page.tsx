@@ -51,7 +51,17 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
       const { data, error: err } = await supabase.auth.signUp({ email, password });
       if (err) { setError(err.message); setLoading(false); return; }
       if (data.session) {
-        router.push(data.user?.email === ADMIN_EMAIL ? "/admin" : "/dashboard");
+        // New signup → create a PENDING company tied to this email. Admin must
+        // approve (flip to 'active') before they get the portal. Best-effort:
+        // the client layout also ensures this row exists on first load.
+        if (email !== ADMIN_EMAIL) {
+          await supabase.from("companies").insert({
+            name: email.split("@")[0],
+            email,
+            status: "pending",
+          });
+        }
+        router.push(email === ADMIN_EMAIL ? "/admin" : "/dashboard");
       } else {
         setCheckEmail(true);
         setLoading(false);

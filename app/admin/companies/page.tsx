@@ -11,20 +11,22 @@ interface SupabaseCompany {
   industry: string;
   credits: number;
   credits_used: number;
-  status: "active" | "suspended";
+  status: "pending" | "active" | "suspended";
   created_at: string;
 }
 
-type CompanyStatus = "active" | "depleted" | "suspended";
+type CompanyStatus = "pending" | "active" | "depleted" | "suspended";
 type StatusFilter = "all" | CompanyStatus;
 
 function getStatus(co: SupabaseCompany): CompanyStatus {
+  if (co.status === "pending") return "pending";
   if (co.status === "suspended") return "suspended";
   if (co.credits_used >= co.credits) return "depleted";
   return "active";
 }
 
 const STATUS_BADGE: Record<CompanyStatus, string> = {
+  pending:   "bg-indigo-50 text-indigo-700",
   active:    "bg-emerald-50 text-emerald-700",
   depleted:  "bg-amber-50 text-amber-700",
   suspended: "bg-red-50 text-red-700",
@@ -126,6 +128,12 @@ export default function AdminCompaniesPage() {
 
   useEffect(() => { load(); }, []);
 
+  const approve = async (id: string) => {
+    if (!supabase) return;
+    await supabase.from("companies").update({ status: "active" }).eq("id", id);
+    load();
+  };
+
   if (!supabase) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
@@ -136,6 +144,8 @@ export default function AdminCompaniesPage() {
       </div>
     );
   }
+
+  const pendingCount = companies.filter((c) => c.status === "pending").length;
 
   const visible = companies
     .filter((c) => filter === "all" || getStatus(c) === filter)
@@ -149,7 +159,12 @@ export default function AdminCompaniesPage() {
         <div>
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Admin</p>
           <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Companies</h1>
-          <p className="text-sm text-zinc-400 mt-0.5">{companies.length} accounts on the platform.</p>
+          <p className="text-sm text-zinc-400 mt-0.5">
+            {companies.length} accounts on the platform
+            {pendingCount > 0 && (
+              <span className="text-indigo-600 font-medium"> · {pendingCount} pending approval</span>
+            )}.
+          </p>
         </div>
         <button
           onClick={() => setShowAdd(true)}
@@ -173,7 +188,7 @@ export default function AdminCompaniesPage() {
           />
         </div>
         <div className="flex gap-1 overflow-x-auto pb-0.5">
-          {(["all", "active", "depleted", "suspended"] as StatusFilter[]).map((f) => (
+          {(["all", "pending", "active", "depleted", "suspended"] as StatusFilter[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -229,13 +244,23 @@ export default function AdminCompaniesPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <Link
-                          href={`/admin/companies/${co.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
-                        >
-                          View →
-                        </Link>
+                        <div className="flex items-center justify-end gap-2">
+                          {co.status === "pending" && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); approve(co.id); }}
+                              className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded-lg transition-colors"
+                            >
+                              Approve
+                            </button>
+                          )}
+                          <Link
+                            href={`/admin/companies/${co.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+                          >
+                            View →
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -272,6 +297,14 @@ export default function AdminCompaniesPage() {
                         <p className="text-sm font-medium text-zinc-700">{remaining.toLocaleString()}</p>
                       </div>
                     </div>
+                    {co.status === "pending" && (
+                      <button
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); approve(co.id); }}
+                        className="mt-3 w-full text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 py-2 rounded-lg transition-colors"
+                      >
+                        Approve account
+                      </button>
+                    )}
                   </Link>
                 );
               })}
