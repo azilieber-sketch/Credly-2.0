@@ -1,8 +1,20 @@
 # TicketFlow — Progress & Session Handoff
 
-_Last updated: 2026-06-09_
+_Last updated: 2026-06-09 (evening)_
 
 Read this first, then `CLAUDE.md` for architecture/conventions.
+
+> **Where we left off (taking a break):** Admin can now fully onboard + remove
+> clients, the admin area is access-guarded, clients can change their password,
+> and a full interactive-UI sweep is done. All shipped to `main` (HEAD `b64c041`).
+> **Next planned work:** the email pipeline build-out — see "NEXT BUILD PHASE"
+> below (routing tag, `messages` table, thread IDs, brand voice). Gmail Step 2/3
+> still pending too.
+>
+> **DB is safe across deploys:** verified nothing in build/deploy touches the
+> database — no seed/migration runs on Vercel. `next build` is the only build
+> step; migrations are applied manually via Supabase MCP/CLI. The DB is a
+> separate hosted project, independent of deploys.
 
 > **Model:** We are on the **managed-service** model (both sides: admin support
 > center + client read-only portal). An earlier self-serve multi-tenant
@@ -39,8 +51,8 @@ Read this first, then `CLAUDE.md` for architecture/conventions.
 - ⚠️ Favicon still the **Next.js default** — tab title updated, tab icon not yet.
 
 **Deploy — IMPORTANT correction to earlier notes**
-- Repo `azilieber-sketch/Credly-2.0`, branch `main`. Current HEAD: **`db4c7b5`**
-  ("Rebrand to TicketFlow + admin UX improvements").
+- Repo `azilieber-sketch/Credly-2.0`, branch `main`. Current HEAD: **`b64c041`**
+  ("Fix client Settings toggle knob position"). All work below is pushed & live.
 - The repo is git-connected to **TWO** Vercel projects, so every push to `main`
   **double-deploys**:
   - **ticketflow** → **https://ticketflow-gules.vercel.app** — the intended live
@@ -81,6 +93,12 @@ Read this first, then `CLAUDE.md` for architecture/conventions.
   permits `pending` in the CHECK, but nothing writes it now — admin creates
   companies as **active**.
 - Cron `/api/integrations/gmail/watch` is **daily** (`0 0 * * *`) for Hobby plan.
+- **Current data (after test cleanup):** `companies` is **EMPTY**, and `auth.users`
+  has **only `admin@credly.com`**. The earlier test clients (`credlytest1`,
+  `Azilieber`/`azilieber@gmail.com`) were intentionally deleted. So "no clients
+  showing in admin" right now is expected — create one via "+ Add client". (A
+  prior "clients disappear on redeploy" worry was a login/RLS display thing, not
+  data loss — deploys don't touch the DB.)
 
 **Admin UX (this session)**
 - Dashboard company rows are **fully clickable** → `/admin/companies/[id]`.
@@ -91,6 +109,54 @@ Read this first, then `CLAUDE.md` for architecture/conventions.
 - Note: `/admin/credits` and `/admin/activity` still render **legacy
   localStorage demo data** (IDs `"1".."8"`), so their rows are intentionally NOT
   linked to the Supabase company detail route (would 404). Migrate later.
+
+**Client onboarding + admin security + UX (latest session — all shipped)**
+- ✅ **Add Client** (`/admin/companies` → "+ Add client"): server route
+  `app/api/admin/clients/route.ts` (POST) uses the **service role key** to create
+  a confirmed Supabase Auth user + matching `companies` row (emails kept in sync
+  so login links to the company), rolls back the auth user if the company insert
+  fails, and marks the source inquiry contacted if launched via Inquiries →
+  "Convert to client". UI shows the temp password once (generate/copy).
+- ✅ **Delete Client** (company detail → Danger zone): same route (DELETE) removes
+  tickets + integrations + company row + the Auth user (so they can't log in),
+  behind a confirmation modal. Refuses to delete `admin@credly.com`.
+- ✅ **Admin route guard** (`app/admin/layout.tsx`): only `admin@credly.com`
+  renders `/admin/*`; signed-out → `/`, non-admin client → `/dashboard`. Sidebar
+  shows the real session email + a Log out button (was hard-coded before).
+- ✅ **Client change password** (`/settings` → Account → Password):
+  `supabase.auth.updateUser({ password })`, 8-char min + match check.
+- ✅ **UI sweep**: every page's interactive elements verified. Fixed the client
+  Settings notification **toggle knob** (was 2px short of flush; now
+  `translate-x-[18px]` + 200ms ease, matches admin).
+- ⚠️ **`SUPABASE_SERVICE_ROLE_KEY` is required** for Add/Delete Client. It's on
+  the Vercel projects but **NOT in local `.env.local`** (only the anon key + URL
+  are) — add it locally to test those flows on localhost.
+
+## NEXT BUILD PHASE — EMAIL PIPELINE ARCHITECTURE (planned, from the Supabase audit)
+
+Target: one shared inbound pipe → routed to the right client by **tag** →
+**threaded** conversations → replies back to the right customer → data structured
+for category dashboards + AI reply drafting (reads past convos + brand voice).
+Audit found these **gaps to add/change** (propose migrations, review first):
+1. **Per-client routing tag** on `companies` (unique, indexed) — e.g.
+   `routing_tag`/`inbound_alias` so mail to `support+<tag>@…` maps to a client.
+   Currently only `email` (login/contact) exists. *Decide:* shared inbox vs the
+   current per-company Gmail-in-`integrations` model.
+2. **`messages` table** (MISSING — removed in the workspace revert): `ticket_id`
+   FK, `sender_type` (customer/agent/system), `body`, `created_at`,
+   `provider_message_id`, `direction`. Today only a single `reply`/`replied_at`
+   lives on `tickets` — no multi-turn thread for AI to read.
+3. **Thread/reference IDs** on `tickets`: `thread_id` (Gmail threadId) +
+   `rfc822_message_id`/`references` so customer replies match the same ticket and
+   outbound replies thread correctly.
+4. **Richer category model**: `issue_category` is locked to
+   billing/technical/general — too coarse for dashboards. Expand or add `tags`.
+5. **Brand voice / company profile** fields (on `companies` or a new table):
+   `brand_voice`, `description`, `support_guidelines`, `signature` — feeds AI
+   drafting. None exist yet.
+6. Hygiene: RLS for the new `messages` table; consider `tickets.company_id` NOT
+   NULL + `ON DELETE CASCADE`; indexes on routing_tag / company_id / status /
+   thread_id / messages.ticket_id.
 
 ## NEXT SESSION — GMAIL INTEGRATION (priority)
 
@@ -130,13 +196,14 @@ and `_lib/gmail.ts` are solid.
 
 ## Also on the list (lower priority)
 
-- **Verify the live ticketflow deploy** of `db4c7b5` (rebrand + UX) once CDN
-  propagates — hard-refresh https://ticketflow-gules.vercel.app.
-- **Disconnect/delete the "credly" Vercel project** to end the double-deploy.
-- Add a **favicon** from the ticket mark.
-- Recreate the **credlytest** client `companies` row if needed for admin demo.
+- **Disconnect/delete the "credly" Vercel project** to end the double-deploy
+  (both ticketflow + credly still build every push).
+- **Migrate legacy localStorage pages to Supabase:** `/admin/credits`,
+  `/admin/activity`, `/admin/invoices` still show fake seed companies (IDs
+  `"1".."8"`); on Invoices/Activity the company links **404** against the real
+  DB. Needs a real migration (flagged in the UI sweep — not band-aided).
+- Add a **favicon** from the ticket mark (tab title done, icon still Next default).
 - Turn Supabase **email confirmation back ON** before real users; add **captcha**.
-- Migrate `/admin/credits` + `/admin/activity` off localStorage to Supabase.
 - Clean up the **pre-existing lint errors** in old admin pages (non-blocking;
   `next build` passes).
 
