@@ -225,6 +225,13 @@ export default function SettingsPage() {
   const [saved, setSaved]         = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
 
+  // Change-password state
+  const [newPwd,     setNewPwd]     = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [pwdSaving,  setPwdSaving]  = useState(false);
+  const [pwdError,   setPwdError]   = useState<string | null>(null);
+  const [pwdSaved,   setPwdSaved]   = useState(false);
+
   // Integrations tab state
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [companyId, setCompanyId]       = useState<string | null>(null);
@@ -284,6 +291,25 @@ export default function SettingsPage() {
     setClient(updated);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const changePassword = async () => {
+    if (pwdSaving) return;
+    if (!supabase) { setPwdError("Service not configured."); return; }
+    setPwdError(null);
+    setPwdSaved(false);
+    if (newPwd.length < 8)       { setPwdError("Password must be at least 8 characters."); return; }
+    if (newPwd !== confirmPwd)   { setPwdError("Those passwords don't match."); return; }
+
+    setPwdSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: newPwd });
+    setPwdSaving(false);
+    if (error) { setPwdError(error.message); return; }
+
+    setNewPwd("");
+    setConfirmPwd("");
+    setPwdSaved(true);
+    setTimeout(() => setPwdSaved(false), 4000);
   };
 
   const setNotification = (key: keyof ClientData["notifications"], value: boolean) => {
@@ -402,6 +428,51 @@ export default function SettingsPage() {
                   className="ml-auto text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2.5 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all"
                 >
                   Save changes
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {/* Password */}
+          <section className="mb-8">
+            <SectionHeader title="Password" description="Change the password you use to sign in." />
+            <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-5 sm:p-6 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide">New password</label>
+                <input
+                  type="password"
+                  value={newPwd}
+                  onChange={(e) => setNewPwd(e.target.value)}
+                  placeholder="At least 8 characters"
+                  autoComplete="new-password"
+                  className="border border-stone-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-semibold text-stone-600 uppercase tracking-wide">Confirm new password</label>
+                <input
+                  type="password"
+                  value={confirmPwd}
+                  onChange={(e) => setConfirmPwd(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && changePassword()}
+                  placeholder="Re-enter the new password"
+                  autoComplete="new-password"
+                  className="border border-stone-200 rounded-xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
+                />
+              </div>
+              {pwdError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{pwdError}</p>
+              )}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                {pwdSaved && (
+                  <p className="text-xs text-emerald-600 font-medium">Password updated — use it next time you sign in.</p>
+                )}
+                <button
+                  onClick={changePassword}
+                  disabled={pwdSaving || !newPwd || !confirmPwd}
+                  className="ml-auto text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2.5 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
+                >
+                  {pwdSaving ? "Updating…" : "Update password"}
                 </button>
               </div>
             </div>
