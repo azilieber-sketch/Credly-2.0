@@ -1,17 +1,37 @@
 @AGENTS.md
 
+> **Session handoff:** read `PROGRESS.md` first — current state and the
+> immediate priority (finish the Gmail integration).
+
 # Credly — Project Context
 
-AI usage, reporting, and billing platform for client accounts. Credit-based model. Built as a concept/demo to show to stakeholders — no real backend, no real auth.
+Managed-service customer-support platform, **both sides**: an **admin support
+center** (`/admin/*`) where staff answer tickets on behalf of client companies,
+and a **client read-only reporting portal** (usage/reports/invoices/dashboard).
+Credit-based model. (An earlier self-serve multi-tenant "workspace" pivot was
+**reverted** — do not reintroduce workspace logic.)
 
 **GitHub:** azilieber-sketch/Credly-2.0  
-**Deploy:** Vercel (auto-deploys on push to main)
+**Deploy:** Vercel project **"ticketflow"** → https://ticketflow-gules.vercel.app
+(auto-deploys on push to `main`). **The repo is ALSO still git-connected to the
+old "credly" Vercel project**, so every push to `main` double-deploys to both —
+"credly" is NOT actually abandoned in Vercel yet. To stop this, disconnect or
+delete the "credly" project in the Vercel dashboard (Settings → Git → Disconnect,
+or delete the project). **MCP scope caveat:** the connected Vercel MCP token only
+sees the team *"azilieber-6381's projects"* (`team_Yj0H6DStQ7Blwq6Yqq6YrJe5`),
+which contains **only "credly"** — "ticketflow" is on a different account/team the
+token can't reach (`get_project`/`get_deployment` for it return 404). So MCP
+verification happens against "credly" as a mirror; to verify the real ticketflow
+site, fetch https://ticketflow-gules.vercel.app directly or re-auth the Vercel MCP
+to the account that owns ticketflow.
 
 ## Stack
 - Next.js 16.2.4, React 19.2.4, Tailwind CSS v4, TypeScript
 - App Router (`app/` directory), `"use client"` where needed
-- Auth: mock-only (localStorage `isLoggedIn` / `userEmail`)
-- Data: all hardcoded or localStorage — no backend, no database
+- Auth: **real Supabase Auth** (email/password + Google OAuth). `admin@credly.com`
+  is the staff login.
+- Data: **real Supabase Postgres** — `companies`, `tickets`, `integrations` with
+  email-based RLS. Migrations tracked in `supabase/migrations/`.
 
 ## Architecture
 
