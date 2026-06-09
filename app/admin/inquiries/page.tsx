@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/app/_lib/supabase";
+
+function convertHref(q: { id: string; email: string }) {
+  return `/admin/companies?convert=1&email=${encodeURIComponent(q.email)}&inquiry_id=${q.id}`;
+}
 
 interface Inquiry {
   id: string;
@@ -134,23 +139,31 @@ export default function AdminInquiriesPage() {
                       </span>
                     </td>
                     <td className="px-5 py-3.5 align-top text-right">
-                      {q.status === "new" ? (
-                        <button
-                          onClick={() => setStatus(q.id, "contacted")}
-                          disabled={busy === q.id}
-                          className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-40"
+                      <div className="flex items-center justify-end gap-3">
+                        <Link
+                          href={convertHref(q)}
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition-colors whitespace-nowrap"
                         >
-                          {busy === q.id ? "…" : "Mark contacted"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setStatus(q.id, "new")}
-                          disabled={busy === q.id}
-                          className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-40"
-                        >
-                          Undo
-                        </button>
-                      )}
+                          Convert to client →
+                        </Link>
+                        {q.status === "new" ? (
+                          <button
+                            onClick={() => setStatus(q.id, "contacted")}
+                            disabled={busy === q.id}
+                            className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-40 whitespace-nowrap"
+                          >
+                            {busy === q.id ? "…" : "Mark contacted"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setStatus(q.id, "new")}
+                            disabled={busy === q.id}
+                            className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-40"
+                          >
+                            Undo
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -170,25 +183,33 @@ export default function AdminInquiriesPage() {
                   {q.message && (
                     <p className="text-sm text-zinc-500 whitespace-pre-wrap break-words mb-2">{q.message}</p>
                   )}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-zinc-400">{formatDate(q.created_at)}</p>
-                    {q.status === "new" ? (
-                      <button
-                        onClick={() => setStatus(q.id, "contacted")}
-                        disabled={busy === q.id}
-                        className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                    <div className="flex items-center gap-3">
+                      {q.status === "new" ? (
+                        <button
+                          onClick={() => setStatus(q.id, "contacted")}
+                          disabled={busy === q.id}
+                          className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-40"
+                        >
+                          {busy === q.id ? "…" : "Mark contacted"}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setStatus(q.id, "new")}
+                          disabled={busy === q.id}
+                          className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-40"
+                        >
+                          Undo
+                        </button>
+                      )}
+                      <Link
+                        href={convertHref(q)}
+                        className="text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
                       >
-                        {busy === q.id ? "…" : "Mark contacted"}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setStatus(q.id, "new")}
-                        disabled={busy === q.id}
-                        className="text-xs font-medium text-zinc-400 hover:text-zinc-700 transition-colors disabled:opacity-40"
-                      >
-                        Undo
-                      </button>
-                    )}
+                        Convert
+                      </Link>
+                    </div>
                   </div>
                 </div>
               ))}

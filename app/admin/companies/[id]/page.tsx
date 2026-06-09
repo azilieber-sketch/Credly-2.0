@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/app/_lib/supabase";
 import SourceIcon, { SourceIconRaw } from "@/app/_components/SourceIcon";
@@ -308,7 +308,11 @@ export default function CompanyDetailPage() {
   const [suggesting,     setSuggesting]     = useState(false);
   const [integrations,     setIntegrations]     = useState<Integration[]>([]);
   const [modalIntChannel,  setModalIntChannel]  = useState<string | null>(null);
+  const [showDelete,       setShowDelete]       = useState(false);
+  const [deleting,         setDeleting]         = useState(false);
+  const [deleteErr,        setDeleteErr]        = useState<string | null>(null);
 
+  const router       = useRouter();
   const searchParams = useSearchParams();
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2500); };
@@ -377,6 +381,32 @@ export default function CompanyDetailPage() {
     });
     await load();
     showToast(newStatus === "suspended" ? "Account suspended" : "Account reactivated");
+  };
+
+  const handleDeleteClient = async () => {
+    if (!company || !supabase || deleting) return;
+    setDeleting(true);
+    setDeleteErr(null);
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { setDeleteErr("Your session expired — please sign in again."); setDeleting(false); return; }
+
+    let res: Response;
+    try {
+      res = await fetch("/api/admin/clients", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ companyId: id }),
+      });
+    } catch {
+      setDeleteErr("Network error — is the server running?"); setDeleting(false); return;
+    }
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) { setDeleteErr(json.error || "Could not delete the client."); setDeleting(false); return; }
+
+    // Gone — leave the (now-missing) detail page.
+    router.push("/admin/companies");
   };
 
   const handleGenerateInvoice = () => {
@@ -636,6 +666,48 @@ export default function CompanyDetailPage() {
       {toast && (
         <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 bg-zinc-900 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {showDelete && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={() => !deleting && setShowDelete(false)}>
+          <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 sm:p-7" onClick={(e) => e.stopPropagation()}>
+            <div className="sm:hidden w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5" />
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-8 h-8 rounded-full bg-red-50 text-red-600 flex items-center justify-center flex-shrink-0">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+              </div>
+              <h2 className="text-base font-bold text-zinc-900">Delete this client?</h2>
+            </div>
+            <p className="text-sm text-zinc-500 mt-1 mb-3">
+              This <span className="font-semibold text-zinc-700">permanently</span> deletes
+              <span className="font-semibold text-zinc-700"> {company.name}</span> and all their data. This cannot be undone.
+            </p>
+            <ul className="text-sm text-zinc-600 bg-zinc-50 border border-zinc-200 rounded-lg p-3 mb-2 flex flex-col gap-1.5">
+              <li className="flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-red-400" /> The login <span className="font-medium break-all">{company.email}</span> (can no longer sign in)</li>
+              <li className="flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-red-400" /> The company record</li>
+              <li className="flex items-center gap-2"><span className="w-1 h-1 rounded-full bg-red-400" /> All their tickets &amp; integrations</li>
+            </ul>
+            {deleteErr && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2 mb-2">{deleteErr}</p>}
+            <div className="flex gap-2.5 mt-3">
+              <button
+                onClick={() => setShowDelete(false)}
+                disabled={deleting}
+                className="flex-1 text-sm font-semibold text-zinc-600 border border-zinc-200 py-2.5 rounded-lg hover:bg-zinc-50 transition-colors disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteClient}
+                disabled={deleting}
+                className="flex-1 text-sm font-semibold bg-red-600 text-white py-2.5 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {deleting ? "Deleting…" : "Delete permanently"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -977,6 +1049,23 @@ export default function CompanyDetailPage() {
             }`}
           >
             {company.status === "suspended" ? "Reactivate" : "Suspend account"}
+          </button>
+        </div>
+
+        <div className="border-t border-red-100 my-4" />
+
+        <div className="flex items-start sm:items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-zinc-700">Delete client</p>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Permanently removes the login, company, tickets, and integrations.
+            </p>
+          </div>
+          <button
+            onClick={() => { setDeleteErr(null); setShowDelete(true); }}
+            className="text-sm font-semibold px-4 py-2 rounded-lg transition-colors flex-shrink-0 bg-red-600 text-white hover:bg-red-700"
+          >
+            Delete client
           </button>
         </div>
       </div>

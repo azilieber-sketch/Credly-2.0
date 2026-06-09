@@ -33,88 +33,197 @@ const STATUS_BADGE: Record<CompanyStatus, string> = {
 const INDUSTRIES = ["E-commerce", "SaaS", "Retail", "Fashion", "Home & Garden", "Healthcare", "Finance", "Outdoors", "Design", "Other"];
 const CREDIT_OPTIONS = [500, 2000, 10000] as const;
 
-function AddCompanyModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+// Readable temp password: no ambiguous chars (0/O, 1/l/I), generated with the
+// browser CSPRNG. Length 14.
+function generatePassword(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  const buf = new Uint32Array(14);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => chars[n % chars.length]).join("");
+}
+
+function AddClientModal({
+  onClose,
+  onAdded,
+  initialEmail = "",
+  inquiryId = null,
+}: {
+  onClose: () => void;
+  onAdded: () => void;
+  initialEmail?: string;
+  inquiryId?: string | null;
+}) {
   const [name,     setName]     = useState("");
-  const [email,    setEmail]    = useState("");
+  const [email,    setEmail]    = useState(initialEmail);
   const [industry, setIndustry] = useState("E-commerce");
   const [credits,  setCredits]  = useState<500 | 2000 | 10000>(500);
+  const [password, setPassword] = useState("");
+  const [showPwd,  setShowPwd]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [saving,   setSaving]   = useState(false);
+  const [result,   setResult]   = useState<{ email: string; password: string } | null>(null);
+  const [copied,   setCopied]   = useState<string | null>(null);
+
+  const copy = (label: string, text: string) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopied(label);
+      setTimeout(() => setCopied(null), 1500);
+    }).catch(() => {});
+  };
 
   const handle = async () => {
-    if (!name.trim() || !email.trim()) return;
-    if (!supabase) return;
+    if (!name.trim() || !email.trim() || !password) return;
+    if (!supabase) { setError("Service not configured."); return; }
     setSaving(true);
     setError(null);
-    const { error: err } = await supabase.from("companies").insert({
-      name:         name.trim(),
-      email:        email.trim(),
-      industry,
-      credits,
-      credits_used: 0,
-      status:       "active",
-    });
+
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) { setError("Your session expired — please sign in again."); setSaving(false); return; }
+
+    let res: Response;
+    try {
+      res = await fetch("/api/admin/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password, industry, credits, inquiryId }),
+      });
+    } catch {
+      setError("Network error — is the server running?"); setSaving(false); return;
+    }
+    const json = await res.json().catch(() => ({}));
     setSaving(false);
-    if (err) { setError(err.message); return; }
+    if (!res.ok) { setError(json.error || "Something went wrong creating the client."); return; }
+
+    setResult({ email: email.trim(), password });
     onAdded();
-    onClose();
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4" onClick={onClose}>
       <div className="bg-white w-full sm:max-w-sm rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 sm:p-7" onClick={(e) => e.stopPropagation()}>
         <div className="sm:hidden w-10 h-1 bg-zinc-200 rounded-full mx-auto mb-5" />
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-bold text-zinc-900">Add company</h2>
-          <button onClick={onClose} className="hidden sm:flex w-7 h-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 text-xl">×</button>
-        </div>
-        <div className="flex flex-col gap-3">
-          <input
-            placeholder="Company name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          />
-          <input
-            placeholder="Contact email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          />
-          <select
-            value={industry}
-            onChange={(e) => setIndustry(e.target.value)}
-            className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          >
-            {INDUSTRIES.map((i) => <option key={i}>{i}</option>)}
-          </select>
-          <select
-            value={credits}
-            onChange={(e) => setCredits(Number(e.target.value) as 500 | 2000 | 10000)}
-            className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
-          >
-            {CREDIT_OPTIONS.map((c) => <option key={c} value={c}>{c.toLocaleString()} credits</option>)}
-          </select>
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
-          <button
-            onClick={handle}
-            disabled={!name.trim() || !email.trim() || saving}
-            className="w-full mt-1 text-sm font-semibold bg-zinc-900 text-white py-3 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-40"
-          >
-            {saving ? "Adding…" : "Add company"}
-          </button>
-        </div>
+
+        {result ? (
+          // ── Confirmation: show the credentials to share with the client ──
+          <>
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M13 4L6.5 11 3 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </div>
+              <h2 className="text-base font-bold text-zinc-900">Client created</h2>
+            </div>
+            <p className="text-sm text-zinc-500 mb-5">
+              Share these login details with the client. The password is shown
+              <span className="font-medium text-zinc-700"> only now</span> — copy it before closing.
+            </p>
+
+            <div className="flex flex-col gap-2.5 mb-5">
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3">
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Login email</p>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-zinc-900 break-all">{result.email}</span>
+                  <button onClick={() => copy("email", result.email)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex-shrink-0">
+                    {copied === "email" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3">
+                <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Temporary password</p>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-mono font-medium text-zinc-900 break-all">{result.password}</span>
+                  <button onClick={() => copy("pwd", result.password)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex-shrink-0">
+                    {copied === "pwd" ? "Copied!" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <button
+                onClick={() => copy("both", `Email: ${result.email}\nPassword: ${result.password}`)}
+                className="text-xs font-medium text-zinc-500 hover:text-zinc-700 self-start"
+              >
+                {copied === "both" ? "Copied both!" : "Copy both"}
+              </button>
+            </div>
+
+            <button onClick={onClose} className="w-full text-sm font-semibold bg-zinc-900 text-white py-3 rounded-lg hover:bg-zinc-800 transition-colors">
+              Done
+            </button>
+          </>
+        ) : (
+          // ── Form ──
+          <>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-base font-bold text-zinc-900">Add client</h2>
+              <button onClick={onClose} className="hidden sm:flex w-7 h-7 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-100 text-xl">×</button>
+            </div>
+            <p className="text-sm text-zinc-500 mb-5">Creates a login + company so the client can sign in right away.</p>
+            <div className="flex flex-col gap-3">
+              <input
+                placeholder="Company name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+              <input
+                type="email"
+                placeholder="Client login email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              />
+              <div className="flex gap-2">
+                <input
+                  type={showPwd ? "text" : "password"}
+                  placeholder="Temporary password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="flex-1 min-w-0 border border-zinc-200 rounded-lg px-3 py-3 text-sm font-mono text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => { setPassword(generatePassword()); setShowPwd(true); }}
+                  className="flex-shrink-0 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 rounded-lg hover:bg-indigo-100 transition-colors"
+                >
+                  Generate
+                </button>
+              </div>
+              <select
+                value={industry}
+                onChange={(e) => setIndustry(e.target.value)}
+                className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              >
+                {INDUSTRIES.map((i) => <option key={i}>{i}</option>)}
+              </select>
+              <select
+                value={credits}
+                onChange={(e) => setCredits(Number(e.target.value) as 500 | 2000 | 10000)}
+                className="w-full border border-zinc-200 rounded-lg px-3 py-3 text-sm text-zinc-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              >
+                {CREDIT_OPTIONS.map((c) => <option key={c} value={c}>{c.toLocaleString()} credits</option>)}
+              </select>
+              {error && <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{error}</p>}
+              <button
+                onClick={handle}
+                disabled={!name.trim() || !email.trim() || password.length < 8 || saving}
+                className="w-full mt-1 text-sm font-semibold bg-zinc-900 text-white py-3 rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? "Creating…" : "Create client"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
 export default function AdminCompaniesPage() {
-  const [companies, setCompanies] = useState<SupabaseCompany[]>([]);
-  const [search,    setSearch]    = useState("");
-  const [filter,    setFilter]    = useState<StatusFilter>("all");
-  const [showAdd,   setShowAdd]   = useState(false);
-  const [loading,   setLoading]   = useState(true);
+  const [companies,  setCompanies]  = useState<SupabaseCompany[]>([]);
+  const [search,     setSearch]     = useState("");
+  const [filter,     setFilter]     = useState<StatusFilter>("all");
+  const [showAdd,    setShowAdd]    = useState(false);
+  const [prefill,    setPrefill]    = useState<{ email: string; inquiryId: string | null }>({ email: "", inquiryId: null });
+  const [loading,    setLoading]    = useState(true);
 
   const load = async () => {
     if (!supabase) { setLoading(false); return; }
@@ -125,6 +234,19 @@ export default function AdminCompaniesPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Open the Add Client modal pre-filled when arriving from an inquiry
+  // ("Convert to client"): /admin/companies?convert=1&email=...&inquiry_id=...
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("convert") === "1") {
+      setPrefill({ email: params.get("email") ?? "", inquiryId: params.get("inquiry_id") });
+      setShowAdd(true);
+      window.history.replaceState({}, "", "/admin/companies");
+    }
+  }, []);
+
+  const openAdd = () => { setPrefill({ email: "", inquiryId: null }); setShowAdd(true); };
 
   if (!supabase) {
     return (
@@ -143,7 +265,14 @@ export default function AdminCompaniesPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
-      {showAdd && <AddCompanyModal onClose={() => setShowAdd(false)} onAdded={load} />}
+      {showAdd && (
+        <AddClientModal
+          onClose={() => setShowAdd(false)}
+          onAdded={load}
+          initialEmail={prefill.email}
+          inquiryId={prefill.inquiryId}
+        />
+      )}
 
       <div className="flex items-start justify-between mb-6 md:mb-8 gap-4">
         <div>
@@ -154,10 +283,10 @@ export default function AdminCompaniesPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowAdd(true)}
+          onClick={openAdd}
           className="text-sm font-semibold bg-zinc-900 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-zinc-800 transition-colors flex-shrink-0"
         >
-          <span className="hidden sm:inline">+ Add company</span>
+          <span className="hidden sm:inline">+ Add client</span>
           <span className="sm:hidden">+ Add</span>
         </button>
       </div>
