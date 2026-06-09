@@ -16,15 +16,15 @@ const SectionLabel = ({ children }: { children: string }) => (
   </span>
 );
 
-// ─── Auth Modal ───────────────────────────────────────────────────────────────
+// ─── Sign-in Modal ──────────────────────────────────────────────────────────
+// For EXISTING clients only. Accounts are created by the admin — there is no
+// public sign-up. New prospects use the "Talk to us" inquiry form instead.
 
 const AuthModal = ({ onClose }: { onClose: () => void }) => {
-  const [mode,       setMode]       = useState<"signin" | "signup">("signin");
-  const [email,      setEmail]      = useState("");
-  const [password,   setPassword]   = useState("");
-  const [error,      setError]      = useState<string | null>(null);
-  const [loading,    setLoading]    = useState(false);
-  const [checkEmail, setCheckEmail] = useState(false);
+  const [email,    setEmail]    = useState("");
+  const [password, setPassword] = useState("");
+  const [error,    setError]    = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(false);
   const router = useRouter();
 
   const ADMIN_EMAIL = "admin@credly.com";
@@ -43,48 +43,10 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
     setLoading(true);
     setError(null);
 
-    if (mode === "signin") {
-      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
-      if (err) { setError(err.message); setLoading(false); return; }
-      router.push(data.user?.email === ADMIN_EMAIL ? "/admin" : "/dashboard");
-    } else {
-      const { data, error: err } = await supabase.auth.signUp({ email, password });
-      if (err) { setError(err.message); setLoading(false); return; }
-      if (data.session) {
-        // New signup → create a PENDING company tied to this email. Admin must
-        // approve (flip to 'active') before they get the portal. Best-effort:
-        // the client layout also ensures this row exists on first load.
-        if (email !== ADMIN_EMAIL) {
-          await supabase.from("companies").insert({
-            name: email.split("@")[0],
-            email,
-            status: "pending",
-          });
-        }
-        router.push(email === ADMIN_EMAIL ? "/admin" : "/dashboard");
-      } else {
-        setCheckEmail(true);
-        setLoading(false);
-      }
-    }
+    const { data, error: err } = await supabase.auth.signInWithPassword({ email, password });
+    if (err) { setError(err.message); setLoading(false); return; }
+    router.push(data.user?.email === ADMIN_EMAIL ? "/admin" : "/dashboard");
   };
-
-  if (checkEmail) {
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={onClose}>
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 relative" onClick={(e) => e.stopPropagation()}>
-          <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-lg">×</button>
-          <span className="text-base font-bold text-gray-900">Credly</span>
-          <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-2">Check your email</h2>
-          <p className="text-stone-500 text-sm leading-relaxed">
-            We sent a confirmation link to{" "}
-            <span className="font-medium text-gray-900">{email}</span>.
-            Click it to activate your account, then sign in.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -103,12 +65,8 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
         </button>
 
         <span className="text-base font-bold text-gray-900">Credly</span>
-        <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">
-          {mode === "signin" ? "Welcome back" : "Get started"}
-        </h2>
-        <p className="text-stone-500 text-sm mb-7">
-          {mode === "signin" ? "Sign in to your Credly account." : "Create your account in seconds."}
-        </p>
+        <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">Welcome back</h2>
+        <p className="text-stone-500 text-sm mb-7">Sign in to your client portal.</p>
 
         <button
           onClick={handleGoogle}
@@ -154,37 +112,138 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
             disabled={!email || !password || loading}
             className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
           >
-            {loading ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+            {loading ? "Please wait…" : "Sign in"}
           </button>
         </div>
 
         <p className="text-xs text-stone-400 text-center mt-6 leading-relaxed">
-          By continuing you agree to our{" "}
-          <a href="#" className="underline hover:text-stone-600 transition-colors">Terms</a> and{" "}
-          <a href="#" className="underline hover:text-stone-600 transition-colors">Privacy Policy</a>.
+          Don&apos;t have an account yet? Accounts are set up by our team —
+          use <span className="font-medium text-stone-600">Talk to us</span> to get started.
         </p>
+      </div>
+    </div>
+  );
+};
 
-        <p className="text-xs text-stone-500 text-center mt-3">
-          {mode === "signin" ? (
-            <>Don&apos;t have an account?{" "}
+// ─── Inquiry Modal ("Talk to us") ─────────────────────────────────────────────
+// New prospects leave their email here; the admin follows up and provisions an
+// account manually. Inserts into the public `inquiries` table (anon INSERT RLS).
+
+const InquiryModal = ({ onClose }: { onClose: () => void }) => {
+  const [name,    setName]    = useState("");
+  const [email,   setEmail]   = useState("");
+  const [message, setMessage] = useState("");
+  const [error,   setError]   = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [sent,    setSent]    = useState(false);
+
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const submit = async () => {
+    if (!emailValid || loading) return;
+    if (!supabase) { setError("Service not configured."); return; }
+    setLoading(true);
+    setError(null);
+
+    // Fold an optional name into the message so the admin sees who it's from,
+    // without adding a column. status defaults to 'new'.
+    const note = [name.trim() && `Name: ${name.trim()}`, message.trim()]
+      .filter(Boolean)
+      .join("\n");
+
+    const { error: err } = await supabase
+      .from("inquiries")
+      .insert({ email: email.trim(), message: note || null });
+
+    if (err) { setError(err.message); setLoading(false); return; }
+    setSent(true);
+    setLoading(false);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors text-lg"
+        >
+          ×
+        </button>
+
+        {sent ? (
+          <div className="text-center py-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-5">
+              <svg width="22" height="22" viewBox="0 0 16 16" fill="none">
+                <path d="M13 4L6.5 11 3 7.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Thanks — we&apos;ll be in touch soon</h2>
+            <p className="text-stone-500 text-sm leading-relaxed">
+              We&apos;ve received your details and our team will reach out to{" "}
+              <span className="font-medium text-gray-900">{email.trim()}</span> shortly.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-7 w-full bg-stone-100 text-stone-700 font-semibold rounded-2xl px-4 py-3 text-sm hover:bg-stone-200 active:scale-[0.98] transition-all"
+            >
+              Close
+            </button>
+          </div>
+        ) : (
+          <>
+            <span className="text-base font-bold text-gray-900">Credly</span>
+            <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">Talk to us</h2>
+            <p className="text-stone-500 text-sm mb-7">
+              Leave your email and we&apos;ll reach out to set up your account.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="Name (optional)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
+              />
+              <input
+                type="email"
+                placeholder="Work email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && submit()}
+                className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50"
+              />
+              <textarea
+                placeholder="How can we help? (optional)"
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                rows={3}
+                className="w-full border border-stone-200 rounded-2xl px-4 py-3 text-sm text-gray-900 placeholder-stone-400 outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition bg-stone-50 resize-none"
+              />
+              {error && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">{error}</p>
+              )}
               <button
-                onClick={() => { setMode("signup"); setError(null); }}
-                className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+                onClick={submit}
+                disabled={!emailValid || loading}
+                className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100"
               >
-                Sign up
+                {loading ? "Sending…" : "Get in touch"}
               </button>
-            </>
-          ) : (
-            <>Already have an account?{" "}
-              <button
-                onClick={() => { setMode("signin"); setError(null); }}
-                className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
-              >
-                Sign in
-              </button>
-            </>
-          )}
-        </p>
+            </div>
+
+            <p className="text-xs text-stone-400 text-center mt-6 leading-relaxed">
+              Already a client?{" "}
+              <span className="font-medium text-stone-600">Sign in</span> from the top right.
+            </p>
+          </>
+        )}
       </div>
     </div>
   );
@@ -194,7 +253,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
 
 const NAV_IDS = ["home", "how-it-works", "features", "pricing", "faq"] as const;
 
-const Navbar = ({ onAuth }: { onAuth: () => void }) => {
+const Navbar = ({ onAuth, onInquiry }: { onAuth: () => void; onInquiry: () => void }) => {
   const [active, setActive] = useState<string>("home");
 
   useEffect(() => {
@@ -235,15 +294,15 @@ const Navbar = ({ onAuth }: { onAuth: () => void }) => {
       <div className="flex items-center gap-3">
         <button
           onClick={onAuth}
-          className="text-sm font-medium text-stone-600 hover:text-stone-900 transition-colors"
+          className="text-sm font-medium text-stone-500 hover:text-stone-900 transition-colors"
         >
           Sign in
         </button>
         <button
-          onClick={onAuth}
+          onClick={onInquiry}
           className="text-sm font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-4 py-2 rounded-lg hover:from-indigo-700 hover:to-violet-700 active:scale-[0.97] transition-all shadow-sm shadow-indigo-200/60"
         >
-          Start free
+          Talk to us
         </button>
       </div>
     </nav>
@@ -325,7 +384,7 @@ const WorkflowPreview = () => (
 
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
-const Hero = ({ onAuth }: { onAuth: () => void }) => (
+const Hero = ({ onInquiry }: { onInquiry: () => void }) => (
   <section id="home" className="relative bg-stone-50 overflow-hidden min-h-[calc(100vh-73px)] flex items-center px-8 py-20 lg:py-0">
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(99,102,241,0.11),transparent)] pointer-events-none" />
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_90%_95%,rgba(251,191,36,0.09),transparent)] pointer-events-none" />
@@ -350,10 +409,10 @@ const Hero = ({ onAuth }: { onAuth: () => void }) => (
 
         <div className="flex flex-col sm:flex-row gap-3">
           <button
-            onClick={onAuth}
+            onClick={onInquiry}
             className="inline-flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-base font-semibold px-7 py-3.5 rounded-xl hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all shadow-md shadow-indigo-300/30"
           >
-            Start free
+            Talk to us
           </button>
           <a
             href="#how-it-works"
@@ -704,7 +763,7 @@ const Check = ({ light }: { light: boolean }) => (
   </svg>
 );
 
-const Pricing = ({ onAuth }: { onAuth: () => void }) => (
+const Pricing = ({ onInquiry }: { onInquiry: () => void }) => (
   <section id="pricing" className="bg-stone-50 py-28 px-8">
     <div className="max-w-7xl mx-auto">
       <div className="text-center mb-16">
@@ -763,14 +822,14 @@ const Pricing = ({ onAuth }: { onAuth: () => void }) => (
             </ul>
 
             <button
-              onClick={onAuth}
+              onClick={onInquiry}
               className={`w-full rounded-xl py-3 text-sm font-semibold transition-all active:scale-[0.98] ${
                 p.highlight
                   ? "bg-white text-indigo-600 hover:bg-stone-50"
                   : "bg-gradient-to-r from-indigo-600 to-violet-600 text-white hover:from-indigo-700 hover:to-violet-700"
               }`}
             >
-              Get started
+              Talk to us
             </button>
           </div>
         ))}
@@ -851,7 +910,7 @@ const FAQ = () => {
 
 // ─── Final CTA ────────────────────────────────────────────────────────────────
 
-const FinalCTA = ({ onAuth }: { onAuth: () => void }) => (
+const FinalCTA = ({ onAuth, onInquiry }: { onAuth: () => void; onInquiry: () => void }) => (
   <section className="bg-white py-28 px-8">
     <div className="max-w-3xl mx-auto text-center">
       <SectionLabel>Get started</SectionLabel>
@@ -859,20 +918,20 @@ const FinalCTA = ({ onAuth }: { onAuth: () => void }) => (
         Ready to build a faster<br />support operation?
       </h2>
       <p className="text-stone-500 text-lg leading-relaxed mb-10 max-w-xl mx-auto">
-        Join teams scaling their support without scaling their headcount. Set up in minutes, no developer required.
+        Tell us about your support operation and our team will set you up with the right plan.
       </p>
       <div className="flex flex-col sm:flex-row gap-3 justify-center">
         <button
-          onClick={onAuth}
+          onClick={onInquiry}
           className="inline-flex items-center justify-center bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-base font-semibold px-8 py-3.5 rounded-xl hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all shadow-md shadow-indigo-300/30"
         >
-          Start free — no credit card required
+          Talk to us
         </button>
         <button
           onClick={onAuth}
           className="inline-flex items-center justify-center text-stone-600 text-base font-medium px-8 py-3.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all"
         >
-          Talk to our team
+          Sign in
         </button>
       </div>
     </div>
@@ -908,22 +967,25 @@ const Footer = () => (
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [authOpen, setAuthOpen] = useState(false);
-  const openAuth = () => setAuthOpen(true);
+  const [authOpen,    setAuthOpen]    = useState(false);
+  const [inquiryOpen, setInquiryOpen] = useState(false);
+  const openAuth    = () => setAuthOpen(true);
+  const openInquiry = () => setInquiryOpen(true);
 
   return (
     <main className="min-h-screen bg-stone-50">
-      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
-      <Navbar onAuth={openAuth} />
-      <Hero onAuth={openAuth} />
+      {authOpen    && <AuthModal    onClose={() => setAuthOpen(false)} />}
+      {inquiryOpen && <InquiryModal onClose={() => setInquiryOpen(false)} />}
+      <Navbar onAuth={openAuth} onInquiry={openInquiry} />
+      <Hero onInquiry={openInquiry} />
       <TrustBar />
       <ValueProps />
       <HowItWorks />
       <Features />
       <Stats />
-      <Pricing onAuth={openAuth} />
+      <Pricing onInquiry={openInquiry} />
       <FAQ />
-      <FinalCTA onAuth={openAuth} />
+      <FinalCTA onAuth={openAuth} onInquiry={openInquiry} />
       <Footer />
     </main>
   );

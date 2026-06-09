@@ -58,53 +58,41 @@ const NAV: NavItem[] = [
   },
 ];
 
-function PendingScreen({
+function NoAccessScreen({
   email,
   onLogout,
-  onRefresh,
 }: {
   email: string | null;
   onLogout: () => void;
-  onRefresh: () => void;
 }) {
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-6">
       <div className="bg-white rounded-3xl shadow-sm border border-stone-100 max-w-md w-full p-8 text-center">
-        <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-5">
+        <div className="w-12 h-12 rounded-2xl bg-stone-100 text-stone-500 flex items-center justify-center mx-auto mb-5">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 2" />
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
         </div>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Your account is pending approval</h1>
+        <h1 className="text-xl font-bold text-gray-900 mb-2">No portal access for this account</h1>
         <p className="text-sm text-stone-500 leading-relaxed mb-1">
-          Thanks for signing up
           {email && (
             <>
-              {", "}
-              <span className="font-medium text-gray-900">{email}</span>
+              <span className="font-medium text-gray-900">{email}</span>{" "}
             </>
           )}
-          .
+          isn&apos;t linked to a client account yet.
         </p>
         <p className="text-sm text-stone-500 leading-relaxed mb-7">
-          Our team is reviewing your account. You&apos;ll get access to your dashboard
-          as soon as it&apos;s approved.
+          Accounts are set up by our team. If you&apos;re expecting access, reach out
+          to your account manager — or use &ldquo;Talk to us&rdquo; on our homepage.
         </p>
-        <div className="flex flex-col gap-2.5">
-          <button
-            onClick={onRefresh}
-            className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-semibold rounded-2xl px-4 py-3 text-sm hover:from-indigo-700 hover:to-violet-700 active:scale-[0.98] transition-all"
-          >
-            Check again
-          </button>
-          <button
-            onClick={onLogout}
-            className="w-full text-stone-500 font-medium rounded-2xl px-4 py-3 text-sm hover:bg-stone-50 transition-colors"
-          >
-            Sign out
-          </button>
-        </div>
+        <button
+          onClick={onLogout}
+          className="w-full text-stone-500 font-medium rounded-2xl px-4 py-3 text-sm hover:bg-stone-50 transition-colors border border-stone-200"
+        >
+          Sign out
+        </button>
       </div>
     </div>
   );
@@ -115,31 +103,21 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname();
   const [email,   setEmail]   = useState<string | null>(null);
   const [ready,   setReady]   = useState(false);
-  const [gate,    setGate]    = useState<"loading" | "pending" | "ok">("loading");
+  const [gate,    setGate]    = useState<"loading" | "noaccess" | "ok">("loading");
   const [navOpen, setNavOpen] = useState(false);
 
-  // Resolve the signed-in user's company and decide whether they see the portal.
-  // A brand-new signup has no company yet (or a 'pending' one) → they wait for
-  // admin approval. Creates the pending row if it's missing so every signup
-  // shows up in the admin list (covers OAuth / email-confirmation signups too).
+  // Resolve the signed-in user's company. Accounts are admin-provisioned now —
+  // there is no self-signup — so if no company row matches this email, the user
+  // simply has no portal access. We never create a row here.
   const loadCompany = useCallback(async (userEmail: string) => {
     if (!supabase) return;
     setGate("loading");
     const { data } = await supabase
       .from("companies")
-      .select("status")
+      .select("id")
       .eq("email", userEmail)
       .maybeSingle();
-    if (!data) {
-      await supabase.from("companies").insert({
-        name: userEmail.split("@")[0],
-        email: userEmail,
-        status: "pending",
-      });
-      setGate("pending");
-      return;
-    }
-    setGate(data.status === "pending" ? "pending" : "ok");
+    setGate(data ? "ok" : "noaccess");
   }, []);
 
   useEffect(() => {
@@ -186,14 +164,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     );
   }
 
-  if (gate === "pending") {
-    return (
-      <PendingScreen
-        email={email}
-        onLogout={logout}
-        onRefresh={() => { if (email) loadCompany(email); }}
-      />
-    );
+  if (gate === "noaccess") {
+    return <NoAccessScreen email={email} onLogout={logout} />;
   }
 
   return (
