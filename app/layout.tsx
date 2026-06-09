@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Credly — AI-powered customer support",
+  title: "TicketFlow — AI-powered customer support",
   description:
-    "Credly uses AI agents to handle your customer support — powered by a flexible credit system with no retainers or wasted spend.",
+    "TicketFlow uses AI agents to handle your customer support — powered by a flexible credit system with no retainers or wasted spend.",
 };
 
 export default function RootLayout({

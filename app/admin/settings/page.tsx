@@ -30,7 +30,7 @@ export default function AdminSettingsPage() {
   const router = useRouter();
 
   const [saved, setSaved]                         = useState(false);
-  const [platformName, setPlatformName]           = useState("Credly");
+  const [platformName, setPlatformName]           = useState("TicketFlow");
   const [supportEmail, setSupportEmail]           = useState("support@credly.io");
   const [notifyNewCompany, setNotifyNewCompany]   = useState(true);
   const [notifyLowCredits, setNotifyLowCredits]   = useState(true);

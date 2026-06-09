@@ -65,8 +65,8 @@ export default function UsagePage() {
             <svg viewBox="0 0 128 128" className="w-36 h-36 sm:w-44 sm:h-44" aria-label={`${creditsUsed} of ${creditsTotal} credits used`}>
               <defs>
                 <linearGradient id="usage-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%"   stopColor="#6366f1" />
-                  <stop offset="100%" stopColor="#7c3aed" />
+                  <stop offset="0%"   stopColor="#1b7fee" />
+                  <stop offset="100%" stopColor="#1566c8" />
                 </linearGradient>
               </defs>
               <circle cx={CX} cy={CY} r={R} fill="none" stroke="#e7e5e4" strokeWidth="10" />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar, { NavItem } from "@/app/_components/Sidebar";
 import { supabase } from "@/app/_lib/supabase";
@@ -172,7 +173,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
     <div className="flex h-screen bg-stone-50 overflow-hidden">
       {/* Mobile top bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white/95 backdrop-blur-sm border-b border-stone-200/60 z-30 flex items-center justify-between px-4 flex-shrink-0">
-        <span className="text-lg font-bold text-gray-900">Credly</span>
+        <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-6 w-auto" priority />
         <button
           onClick={() => setNavOpen(true)}
           className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-500 hover:bg-stone-100 transition-colors"

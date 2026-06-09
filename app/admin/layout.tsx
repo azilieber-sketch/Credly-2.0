@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import NotificationBell from "@/app/_components/NotificationBell";
 
@@ -22,16 +23,6 @@ const NAV = [
     icon: (
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" />
-      </svg>
-    ),
-  },
-  {
-    href: "/admin/inquiries",
-    label: "Inquiries",
-    icon: (
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
-        <polyline points="22,6 12,13 2,6" />
       </svg>
     ),
   },
@@ -90,6 +81,16 @@ const NAV = [
     ),
   },
   {
+    href: "/admin/inquiries",
+    label: "Inquiries",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+        <polyline points="22,6 12,13 2,6" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/settings",
     label: "Settings",
     icon: (
@@ -113,7 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile top bar */}
       <header className="md:hidden fixed top-0 left-0 right-0 h-14 bg-zinc-900 z-30 flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-white font-bold text-base">Credly</span>
+          <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-6 w-auto" priority />
           <span className="text-[9px] font-bold tracking-widest uppercase bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30">
             Admin
           </span>
@@ -155,7 +156,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* Logo */}
         <div className="px-4 h-[56px] flex items-center justify-between border-b border-zinc-800 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-white font-bold text-base tracking-tight">Credly</span>
+            <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-6 w-auto" priority />
             <span className="text-[9px] font-bold tracking-widest uppercase bg-indigo-500/20 text-indigo-400 px-1.5 py-0.5 rounded border border-indigo-500/30">
               Admin
             </span>

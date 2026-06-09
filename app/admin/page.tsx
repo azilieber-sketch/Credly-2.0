@@ -34,6 +34,14 @@ interface Company {
   created_at: string;
 }
 
+interface Inquiry {
+  id: string;
+  email: string;
+  message: string | null;
+  status: "new" | "contacted";
+  created_at: string;
+}
+
 function timeAgo(iso: string): string {
   const diff  = Date.now() - new Date(iso).getTime();
   const mins  = Math.floor(diff / 60000);
@@ -66,17 +74,20 @@ const STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: stri
 export default function AdminOverview() {
   const [tickets,   setTickets]   = useState<Ticket[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [loading,   setLoading]   = useState(true);
 
   const load = useCallback(async () => {
     if (!supabase) { setLoading(false); return; }
     setLoading(true);
-    const [{ data: tData }, { data: cData }] = await Promise.all([
+    const [{ data: tData }, { data: cData }, { data: qData }] = await Promise.all([
       supabase.from("tickets").select("*").order("created_at", { ascending: false }),
       supabase.from("companies").select("*").order("name"),
+      supabase.from("inquiries").select("*").order("created_at", { ascending: false }),
     ]);
     if (tData) setTickets(tData as Ticket[]);
     if (cData) setCompanies(cData as Company[]);
+    if (qData) setInquiries(qData as Inquiry[]);
     setLoading(false);
   }, []);
 
@@ -86,6 +97,7 @@ export default function AdminOverview() {
     const channel = supabase
       .channel(`admin-overview-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "tickets" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "public", table: "inquiries" }, () => load())
       .subscribe();
     return () => { supabase!.removeChannel(channel); };
   }, [load]);
@@ -112,14 +124,16 @@ export default function AdminOverview() {
     return o[a.indicator as keyof typeof o] - o[b.indicator as keyof typeof o];
   });
 
-  const recentTickets = tickets.slice(0, 10);
+  const recentTickets   = tickets.slice(0, 10);
+  const newInquiries    = inquiries.filter((q) => q.status === "new");
+  const recentInquiries = inquiries.slice(0, 4);
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
 
       {/* Header */}
       <div className="mb-6 md:mb-8">
-        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">Credly Admin</p>
+        <p className="text-xs font-semibold text-zinc-400 uppercase tracking-widest mb-1">TicketFlow Admin</p>
         <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Support Operations</h1>
         <p className="text-sm text-zinc-400 mt-0.5">{companies.length} companies · Live</p>
       </div>
@@ -160,6 +174,52 @@ export default function AdminOverview() {
         ))}
       </div>
 
+      {/* Inquiries — new leads from the landing page */}
+      <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-zinc-900">Inquiries</p>
+            {newInquiries.length > 0 && (
+              <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
+                {newInquiries.length} new
+              </span>
+            )}
+          </div>
+          <Link href="/admin/inquiries" className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors">
+            View all →
+          </Link>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : recentInquiries.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-zinc-400">No inquiries yet.</div>
+        ) : (
+          <div className="divide-y divide-zinc-100">
+            {recentInquiries.map((q) => (
+              <Link
+                key={q.id}
+                href="/admin/inquiries"
+                className="flex items-center gap-3 px-5 py-3.5 hover:bg-zinc-50 transition-colors group"
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${q.status === "new" ? "bg-indigo-500" : "bg-zinc-300"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-indigo-700 transition-colors">{q.email}</p>
+                  <p className="text-xs text-zinc-400 truncate mt-0.5">{q.message || "No message"}</p>
+                </div>
+                <span className={`hidden sm:inline-flex text-[11px] font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${
+                  q.status === "new" ? "bg-indigo-50 text-indigo-700" : "bg-emerald-50 text-emerald-700"
+                }`}>
+                  {q.status}
+                </span>
+                <span className="text-[11px] text-zinc-400 whitespace-nowrap flex-shrink-0">{timeAgo(q.created_at)}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Company list */}
       <div className="bg-white rounded-xl border border-zinc-200 overflow-hidden mb-5">
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100">
@@ -177,13 +237,17 @@ export default function AdminOverview() {
         ) : (
           <div className="divide-y divide-zinc-100">
             {companyRows.map((co) => (
-              <div key={co.id} className="flex items-center gap-3.5 px-5 py-3.5">
+              <Link
+                key={co.id}
+                href={`/admin/companies/${co.id}`}
+                className="flex items-center gap-3.5 px-5 py-3.5 hover:bg-zinc-50 transition-colors group"
+              >
                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
                   co.indicator === "red" ? "bg-red-500" : co.indicator === "amber" ? "bg-amber-400" : "bg-emerald-500"
                 }`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-zinc-900 truncate">{co.name}</p>
+                    <p className="text-sm font-semibold text-zinc-900 truncate group-hover:text-indigo-700 transition-colors">{co.name}</p>
                     {co.openCount > 0 && (
                       <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
                         co.indicator === "red" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-600"
@@ -196,13 +260,13 @@ export default function AdminOverview() {
                     {co.last ? `Last ticket ${timeAgo(co.last)}` : "No tickets yet"}
                   </p>
                 </div>
-                <Link
-                  href={`/admin/companies/${co.id}`}
-                  className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors flex-shrink-0"
-                >
+                <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-lg group-hover:bg-indigo-100 transition-colors flex-shrink-0">
                   View tickets
-                </Link>
-              </div>
+                </span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-300 group-hover:text-zinc-400 transition-colors flex-shrink-0">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </Link>
             ))}
           </div>
         )}

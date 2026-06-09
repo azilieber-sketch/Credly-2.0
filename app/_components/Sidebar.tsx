@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 export interface NavItem {
@@ -57,9 +58,9 @@ export default function Sidebar({
             <Link
               href={logoHref}
               onClick={onClose}
-              className="text-lg font-bold tracking-tight text-gray-900 hover:text-indigo-700 transition-colors"
+              className="flex items-center hover:opacity-80 transition-opacity"
             >
-              Credly
+              <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-7 w-auto" priority />
             </Link>
             {adminBadge && (
               <span className="text-[9px] font-semibold tracking-widest uppercase bg-zinc-900 text-white px-1.5 py-0.5 rounded">

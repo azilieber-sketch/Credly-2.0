@@ -17,6 +17,38 @@ html {
   --font-mono: var(--font-geist-mono);
 }
 
+/* Brand reskin.
+   TicketFlow's primary accent is the logo blue #1B7FEE. The app was built on
+   indigo (with violet used only as the second stop in gradients), so we remap
+   BOTH the indigo and violet color scales to one blue ramp (600 = #1B7FEE).
+   Every existing indigo and violet utility across all pages picks this up, and
+   the indigo-to-violet gradients collapse to a clean solid brand blue. */
+@theme {
+  --color-indigo-50:  #eff6ff;
+  --color-indigo-100: #dceafe;
+  --color-indigo-200: #bedafd;
+  --color-indigo-300: #8fc2fb;
+  --color-indigo-400: #57a2f5;
+  --color-indigo-500: #2b8bef;
+  --color-indigo-600: #1b7fee;
+  --color-indigo-700: #1566c8;
+  --color-indigo-800: #1854a1;
+  --color-indigo-900: #18487f;
+  --color-indigo-950: #112c4e;
+
+  --color-violet-50:  #eff6ff;
+  --color-violet-100: #dceafe;
+  --color-violet-200: #bedafd;
+  --color-violet-300: #8fc2fb;
+  --color-violet-400: #57a2f5;
+  --color-violet-500: #2b8bef;
+  --color-violet-600: #1b7fee;
+  --color-violet-700: #1566c8;
+  --color-violet-800: #1854a1;
+  --color-violet-900: #18487f;
+  --color-violet-950: #112c4e;
+}
+
 body {
   background: var(--color-background);
   color: var(--color-foreground);
@@ -24,8 +56,8 @@ body {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.15);
-  color: #1e1b4b;
+  background: rgba(27, 127, 238, 0.15);
+  color: #112c4e;
 }
 
 /* Interaction feel: make clickable things show the hand cursor, and

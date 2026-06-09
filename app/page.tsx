@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/_lib/supabase";
 
@@ -64,7 +65,7 @@ const AuthModal = ({ onClose }: { onClose: () => void }) => {
           ×
         </button>
 
-        <span className="text-base font-bold text-gray-900">Credly</span>
+        <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-7 w-auto" />
         <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">Welcome back</h2>
         <p className="text-stone-500 text-sm mb-7">Sign in to your client portal.</p>
 
@@ -197,7 +198,7 @@ const InquiryModal = ({ onClose }: { onClose: () => void }) => {
           </div>
         ) : (
           <>
-            <span className="text-base font-bold text-gray-900">Credly</span>
+            <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-7 w-auto" />
             <h2 className="text-2xl font-bold text-gray-900 mt-5 mb-1">Talk to us</h2>
             <p className="text-stone-500 text-sm mb-7">
               Leave your email and we&apos;ll reach out to set up your account.
@@ -279,8 +280,8 @@ const Navbar = ({ onAuth, onInquiry }: { onAuth: () => void; onInquiry: () => vo
 
   return (
     <nav className="w-full px-8 py-5 flex items-center justify-between border-b border-stone-200/60 bg-white/90 backdrop-blur-md sticky top-0 z-50">
-      <a href="#home" className="text-xl font-bold tracking-tight text-gray-900 hover:text-indigo-600 transition-colors">
-        Credly
+      <a href="#home" className="flex items-center hover:opacity-80 transition-opacity">
+        <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-8 w-auto" priority />
       </a>
 
       <div className="hidden md:flex items-center gap-8">
@@ -372,7 +373,7 @@ const WorkflowPreview = () => (
     {/* Human control badge */}
     <div className="absolute top-12 right-8 z-20 bg-white rounded-2xl shadow-lg shadow-stone-200/60 border border-stone-100 px-3 py-2.5 flex items-center gap-2">
       <div className="w-6 h-6 rounded-lg bg-violet-50 flex items-center justify-center flex-shrink-0">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1b7fee" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
           <circle cx="9" cy="7" r="4" />
         </svg>
@@ -386,7 +387,7 @@ const WorkflowPreview = () => (
 
 const Hero = ({ onInquiry }: { onInquiry: () => void }) => (
   <section id="home" className="relative bg-stone-50 overflow-hidden min-h-[calc(100vh-73px)] flex items-center px-8 py-20 lg:py-0">
-    <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(99,102,241,0.11),transparent)] pointer-events-none" />
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_70%_50%_at_50%_-10%,rgba(27,127,238,0.11),transparent)] pointer-events-none" />
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_40%_at_90%_95%,rgba(251,191,36,0.09),transparent)] pointer-events-none" />
 
     <div className="max-w-7xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-16 items-center relative">
@@ -403,7 +404,7 @@ const Hero = ({ onInquiry }: { onInquiry: () => void }) => (
           </h1>
 
           <p className="text-lg text-stone-500 leading-relaxed max-w-lg">
-            Credly gives customer support teams AI-powered workflows to resolve faster, escalate smarter, and deliver better experiences — without losing the human touch.
+            TicketFlow gives customer support teams AI-powered workflows to resolve faster, escalate smarter, and deliver better experiences — without losing the human touch.
           </p>
         </div>
 
@@ -496,7 +497,7 @@ const ValueProps = () => (
   <section className="bg-stone-50 py-28 px-8">
     <div className="max-w-7xl mx-auto">
       <div className="text-center mb-16">
-        <SectionLabel>Why Credly</SectionLabel>
+        <SectionLabel>Why TicketFlow</SectionLabel>
         <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
           Built for teams, not to replace them.
         </h2>
@@ -545,7 +546,7 @@ const HOW_STEPS = [
 
 const HowItWorks = () => (
   <section id="how-it-works" className="relative bg-white py-28 px-8 overflow-hidden">
-    <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_100%_100%,rgba(99,102,241,0.04),transparent)] pointer-events-none" />
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_40%_at_100%_100%,rgba(27,127,238,0.04),transparent)] pointer-events-none" />
     <div className="max-w-7xl mx-auto relative">
       <div className="text-center mb-16">
         <SectionLabel>How it works</SectionLabel>
@@ -553,7 +554,7 @@ const HowItWorks = () => (
           From setup to faster support<br />in three steps.
         </h2>
         <p className="text-stone-500 mt-4 text-lg max-w-xl mx-auto leading-relaxed">
-          Credly fits into your existing operation — no rebuilding required.
+          TicketFlow fits into your existing operation — no rebuilding required.
         </p>
       </div>
 
@@ -687,7 +688,7 @@ const Stats = () => (
       <div className="text-center mb-14">
         <SectionLabel>Results</SectionLabel>
         <h2 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-gray-900">
-          What teams achieve<br />with Credly.
+          What teams achieve<br />with TicketFlow.
         </h2>
       </div>
 
@@ -851,14 +852,14 @@ const faqs = [
   },
   {
     q: "What is a credit?",
-    a: "One credit equals one AI-assisted customer conversation. When your team resolves an inquiry using Credly's AI tools, it uses one credit from your balance.",
+    a: "One credit equals one AI-assisted customer conversation. When your team resolves an inquiry using TicketFlow's AI tools, it uses one credit from your balance.",
   },
   {
     q: "Do credits expire?",
     a: "Credits roll over depending on your plan — 7, 30, or 90 days. Unused credits carry forward within that window.",
   },
   {
-    q: "What channels does Credly support?",
+    q: "What channels does TicketFlow support?",
     a: "Currently email and live chat. Integrations with Shopify, Zendesk, and Gorgias are in development and coming soon.",
   },
   {
@@ -944,7 +945,7 @@ const Footer = () => (
   <footer className="bg-zinc-950 text-zinc-400 px-8 py-14">
     <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
       <div>
-        <span className="text-white font-bold text-lg">Credly</span>
+        <Image src="/logo.png" alt="TicketFlow" width={1086} height={383} className="h-8 w-auto" />
         <p className="text-sm mt-1.5 max-w-xs leading-relaxed">
           AI-powered support infrastructure for modern teams.
         </p>
@@ -959,7 +960,7 @@ const Footer = () => (
         <a href="#"             className="hover:text-white transition-colors">Terms</a>
       </div>
 
-      <p className="text-xs text-zinc-700">© 2026 Credly. All rights reserved.</p>
+      <p className="text-xs text-zinc-700">© 2026 TicketFlow. All rights reserved.</p>
     </div>
   </footer>
 );

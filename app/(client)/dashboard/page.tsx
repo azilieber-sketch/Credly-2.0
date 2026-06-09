@@ -264,7 +264,7 @@ export default function DashboardPage() {
           Support Overview · {month}
         </h1>
         <p className="text-stone-400 mt-2 text-sm">
-          Your support is managed by the Credly team. This is a read-only view.
+          Your support is managed by the TicketFlow team. This is a read-only view.
         </p>
       </div>
 
