@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import NotificationBell from "@/app/_components/NotificationBell";
+import { supabase } from "@/app/_lib/supabase";
+
+const ADMIN_EMAIL = "admin@credly.com";
 
 const NAV = [
   {
@@ -106,7 +109,49 @@ const COMING_SOON = ["Agents", "Workflows"];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router   = useRouter();
   const [navOpen, setNavOpen] = useState(false);
+  const [email,   setEmail]   = useState<string | null>(null);
+  const [ready,   setReady]   = useState(false);
+
+  // Admin-only guard. The admin interface must not render for non-admins (a
+  // logged-in client could otherwise reach /admin even though RLS hides the
+  // data). Admin identity = the auth session email === admin@credly.com — the
+  // same identity RLS uses (auth.email()). Non-admins go to the client
+  // dashboard; signed-out users go to the landing page.
+  useEffect(() => {
+    if (!supabase) { router.replace("/"); return; }
+    let settled = false;
+    const decide = (sessionEmail: string | null | undefined) => {
+      if (settled) return;
+      settled = true;
+      if (!sessionEmail)                 { router.replace("/"); return; }
+      if (sessionEmail !== ADMIN_EMAIL)  { router.replace("/dashboard"); return; }
+      setEmail(sessionEmail);
+      setReady(true);
+    };
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => decide(session?.user?.email))
+      .catch(() => { if (!settled) { settled = true; router.replace("/"); } });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") router.replace("/");
+    });
+    return () => subscription.unsubscribe();
+  }, [router]);
+
+  const logout = async () => {
+    await supabase?.auth.signOut();
+    router.push("/");
+  };
+
+  // Don't render the admin shell until we've confirmed the admin identity.
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-zinc-50 flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-zinc-50 overflow-hidden">
@@ -221,7 +266,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
         {/* Footer */}
         <div className="px-2 py-3 border-t border-zinc-800 flex-shrink-0">
-          <p className="text-[11px] text-zinc-600 px-2.5 mb-1.5 truncate">admin@credly.com</p>
+          <p className="text-[11px] text-zinc-500 px-2.5 mb-1.5 truncate">{email}</p>
+          <button
+            onClick={logout}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-[13px] font-medium text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200 transition-all text-left"
+          >
+            <span className="text-zinc-600">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+              </svg>
+            </span>
+            Log out
+          </button>
         </div>
       </aside>
 
