@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/app/_lib/supabase-server";
+import { normalizeMessageId, toRfcMessageId } from "@/app/_lib/email";
 
 // Admin reply on an email-pipeline ticket. Stores the outbound message, then
 // hands actual delivery to the ActivePieces "send" flow (its Gmail connection
@@ -93,18 +94,19 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const res = await fetch(sendUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      // Message-IDs are stored bare; RFC 5322 headers need angle brackets.
       body: JSON.stringify({
         to: toEmail,
         subject,
         body: replyText,
-        inReplyTo,
-        references: inReplyTo,
+        inReplyTo: inReplyTo ? toRfcMessageId(inReplyTo) : null,
+        references: inReplyTo ? toRfcMessageId(inReplyTo) : null,
       }),
     });
     sendOk = res.ok;
     if (res.ok) {
       const json = await res.json().catch(() => ({}));
-      if (typeof json?.messageId === "string") returnedMessageId = json.messageId;
+      returnedMessageId = normalizeMessageId(json?.messageId);
     } else {
       sendErr = `Send flow responded ${res.status}`;
     }

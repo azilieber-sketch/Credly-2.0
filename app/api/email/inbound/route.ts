@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServiceSupabase } from "@/app/_lib/supabase-server";
+import { normalizeMessageId, normalizeMessageIdList } from "@/app/_lib/email";
 
 // Inbound email webhook — called by the ActivePieces "inbound" flow whenever
 // the shared support inbox receives a mail. Routes the email to a company by
@@ -16,8 +17,15 @@ import { getServiceSupabase } from "@/app/_lib/supabase-server";
 //   references?: string | string[],
 //   deliveredTo?: string  // Delivered-To header — on auto-forwarded mail the
 //                         // To header keeps the ORIGINAL address, so the plus
-//                         // tag often only appears here
+//                         // tag often only appears here. May arrive as the
+//                         // full raw header line ("Delivered-To: x@y.com");
+//                         // addresses are regex-extracted so that's fine.
 // }
+//
+// ActivePieces quirks tolerated: Message-IDs may arrive with angle brackets
+// (normalized to bare before store/compare); inReplyTo/references may be
+// empty, missing, or an unresolved "{{template}}" literal (treated as not a
+// reply); references may be a space-separated string or an array.
 
 const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
 
@@ -46,15 +54,6 @@ function normalizeSubject(subject: string): string {
   return s.toLowerCase();
 }
 
-function asArray(value: unknown): string[] {
-  if (Array.isArray(value)) return value.map(String);
-  if (typeof value === "string" && value.trim()) {
-    // References header is a whitespace-separated list of Message-IDs
-    return value.trim().split(/\s+/);
-  }
-  return [];
-}
-
 export async function POST(req: NextRequest) {
   // ── Auth: shared secret from the ActivePieces flow ─────────────────────────
   const secret = process.env.EMAIL_WEBHOOK_SECRET;
@@ -76,9 +75,9 @@ export async function POST(req: NextRequest) {
   const subject    = typeof body.subject === "string" ? body.subject : "";
   const bodyText   = typeof body.text === "string" ? body.text : "";
   const bodyHtml   = typeof body.html === "string" ? body.html : null;
-  const messageId  = typeof body.messageId === "string" && body.messageId.trim() ? body.messageId.trim() : null;
-  const inReplyTo  = typeof body.inReplyTo === "string" && body.inReplyTo.trim() ? body.inReplyTo.trim() : null;
-  const references = asArray(body.references);
+  const messageId  = normalizeMessageId(body.messageId);
+  const inReplyTo  = normalizeMessageId(body.inReplyTo);
+  const references = normalizeMessageIdList(body.references);
 
   if (!fromEmail) {
     return NextResponse.json({ error: "Missing or unparseable 'from' address." }, { status: 400 });
