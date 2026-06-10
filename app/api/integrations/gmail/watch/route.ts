@@ -1,3 +1,6 @@
+// PARKED — direct Gmail OAuth integration (future premium feature).
+// The live email pipeline is ActivePieces -> /api/email/inbound (see
+// /api/tickets/[id]/reply for outbound). Do not delete without asking.
 // This cron renews Gmail push watch subscriptions before they expire (7-day TTL).
 // Email ingestion is handled in real-time by /api/integrations/gmail/push via Pub/Sub.
 import { NextRequest, NextResponse } from "next/server";

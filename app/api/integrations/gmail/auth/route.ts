@@ -1,3 +1,6 @@
+// PARKED — direct Gmail OAuth integration (future premium feature).
+// The live email pipeline is ActivePieces -> /api/email/inbound (see
+// /api/tickets/[id]/reply for outbound). Do not delete without asking.
 import { NextRequest, NextResponse } from "next/server";
 
 const SCOPES = [

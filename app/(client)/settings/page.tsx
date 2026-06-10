@@ -25,6 +25,7 @@ interface ChannelConfig {
   name: string;
   desc: string;
   comingSoon?: boolean;
+  managed?: boolean; // set up by the TicketFlow team — no self-connect
   fields: { key: string; label: string; placeholder: string; secret?: boolean }[];
 }
 
@@ -33,12 +34,10 @@ interface ChannelConfig {
 const CHANNELS: ChannelConfig[] = [
   {
     id: "gmail",
-    name: "Gmail",
-    desc: "Receive and send customer emails directly from your inbox.",
-    fields: [
-      { key: "email",        label: "Gmail address", placeholder: "you@gmail.com" },
-      { key: "app_password", label: "App password",  placeholder: "xxxx xxxx xxxx xxxx", secret: true },
-    ],
+    name: "Email",
+    desc: "Your support inbox is connected by the TicketFlow team — emails forwarded to your routing address become tickets automatically.",
+    managed: true,
+    fields: [],
   },
   {
     id: "slack",
@@ -582,6 +581,11 @@ export default function SettingsPage() {
                       <span className="text-[10px] font-semibold tracking-wider uppercase bg-stone-100 text-stone-400 px-2 py-0.5 rounded-md flex-shrink-0">
                         Soon
                       </span>
+                    ) : ch.managed ? (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2.5 py-1 rounded-full flex-shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 flex-shrink-0" />
+                        Managed by TicketFlow
+                      </span>
                     ) : connected ? (
                       <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full flex-shrink-0">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
@@ -605,7 +609,7 @@ export default function SettingsPage() {
                     )}
                   </div>
 
-                  {!ch.comingSoon && (
+                  {!ch.comingSoon && !ch.managed && (
                     connected ? (
                       <button
                         onClick={() => handleDisconnect(ch.id)}

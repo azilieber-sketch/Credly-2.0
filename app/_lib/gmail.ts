@@ -1,3 +1,6 @@
+// PARKED — direct Gmail OAuth integration (future premium feature).
+// The live email pipeline is ActivePieces -> /api/email/inbound (see
+// /api/tickets/[id]/reply for outbound). Do not delete without asking.
 export interface GmailCredentials {
   access_token: string;
   refresh_token: string;
