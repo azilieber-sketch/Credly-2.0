@@ -1,7 +1,8 @@
 @AGENTS.md
 
-> **Session handoff:** read `PROGRESS.md` first — current state and the
-> immediate priority (finish the Gmail integration).
+> **Session handoff:** read `PROGRESS.md` first — current state, what's live,
+> and the next-up list. The email pipeline (ActivePieces ↔ shared Gmail inbox)
+> is COMPLETE and verified end-to-end as of 2026-06-10.
 
 # Credly — Project Context
 
@@ -30,8 +31,21 @@ to the account that owns ticketflow.
 - App Router (`app/` directory), `"use client"` where needed
 - Auth: **real Supabase Auth** (email/password + Google OAuth). `admin@credly.com`
   is the staff login.
-- Data: **real Supabase Postgres** — `companies`, `tickets`, `integrations` with
-  email-based RLS. Migrations tracked in `supabase/migrations/`.
+- Data: **real Supabase Postgres** — `companies`, `tickets`, `messages`,
+  `integrations`, `inquiries` with email-based RLS. Migrations tracked in
+  `supabase/migrations/` and applied manually via the Supabase MCP/CLI
+  (deploys never touch the DB).
+- Email: **ActivePieces** (free cloud) is the middleware both directions —
+  shared Gmail inbox + per-company `routing_tag` plus-addressing
+  (`support+<tag>@…`) → `POST /api/email/inbound`; replies go out via
+  `POST /api/tickets/[id]/reply` → ActivePieces send-flow webhook. Direct
+  Gmail OAuth code under `app/api/integrations/gmail/*` is PARKED (future
+  premium) — don't delete.
+- Ticket statuses: `new → read → answered → customer-replied → resolved`
+  (resolve is manual-only; shared config in `app/_lib/ticket-status.ts`).
+  There is no priority/urgency field anymore.
+- Local env: copy `.env.example` → `.env.local`. Production values live on
+  the Vercel **ticketflow** project's env vars.
 
 ## Architecture
 

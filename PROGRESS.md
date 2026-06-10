@@ -4,17 +4,28 @@ _Last updated: 2026-06-10_
 
 Read this first, then `CLAUDE.md` for architecture/conventions.
 
-> **Where we left off:** Email pipeline code is BUILT and the **inbound half
-> is LIVE and tested end-to-end** (HEAD `5f4d502`). The ActivePieces inbound
-> flow exists, its Test Step passed against production, and the webhook was
-> self-tested live (tag routing, dedupe replay, threaded reply, unknown-tag →
-> unassigned — all green; synthetic test tickets deleted afterward).
-> **What remains:** the ActivePieces SEND flow (webhook trigger → Gmail send),
-> putting its URL in `ACTIVEPIECES_SEND_WEBHOOK_URL` on Vercel ticketflow,
-> then the spec's full end-to-end checklist with a real mailbox. Spec:
-> `ticketflow-activepieces-email-pipeline-spec.md` (in Azi's Downloads).
+> **Where we left off (2026-06-10, end of session):** The email pipeline is
+> **COMPLETE and verified live end-to-end** by Azi: customer email →
+> ActivePieces → ticket under the right company → admin reply (threaded, with
+> Reply-To routing tag) → customer inbox → customer reply appends to the SAME
+> ticket. The new ticket status model is live (new → read → answered →
+> customer-replied → resolved-manual-only), conversation threads render in all
+> three ticket views, urgency/priority is fully removed (column dropped), and
+> the own-reply echo loop is guarded. **Nothing is half-done.** Next work is
+> the lower-priority list at the bottom (disconnect "credly" Vercel project,
+> favicon, email confirmation ON, legacy localStorage pages, landing copy) and
+> future features (AI reply drafting + brand-voice fields — `messages` already
+> stores full history for this).
+>
+> **Working from a new machine/account:** `.env.local` is gitignored — copy
+> `.env.example` and fill values (Supabase dashboard for keys; Vercel
+> ticketflow → Settings → Env Vars holds the production copies of all
+> secrets, including `EMAIL_WEBHOOK_SECRET` and
+> `ACTIVEPIECES_SEND_WEBHOOK_URL`). The ActivePieces flows live in the
+> ActivePieces cloud account (Gmail: credlytest1@gmail.com); their config is
+> documented in this file.
 
-## EMAIL PIPELINE — BUILT (2026-06-10); INBOUND LIVE, SEND FLOW PENDING
+## EMAIL PIPELINE — COMPLETE & LIVE (2026-06-10)
 
 Locked architecture: ONE shared support inbox; each client forwards their
 support email to `support+<routing_tag>@<shared>`; ActivePieces (verified
@@ -97,18 +108,20 @@ Gmail OAuth code is PARKED as a future premium feature (banner comments on
   the reply endpoint now), and the client portal (read-only). Legacy
   description+reply view kept for pre-pipeline tickets.
 
-### Remaining to go live (send half)
-1. **Send flow in ActivePieces:** Webhook trigger → Gmail "Send Email"
-   mapping to/subject/body + In-Reply-To/References from the webhook payload
-   `{ to, subject, body, inReplyTo, references }` (IDs arrive WITH `<>`,
-   ready for headers); put the flow's webhook URL in
-   `ACTIVEPIECES_SEND_WEBHOOK_URL` on Vercel ticketflow → redeploy.
-2. Run the spec's full end-to-end checklist with a real mailbox: email in →
-   ticket under right company → admin reply lands threaded in the customer
-   inbox → customer reply appends to the same ticket → client portal shows
-   the thread read-only.
-3. Remember the trigger is **polling (~5 min on free tier)** — inbound
-   latency is expected; outbound is instant (webhook).
+### ✅ Send half — DONE (both ActivePieces flows live)
+- **Inbound flow:** Gmail trigger (polling, ~5 min on free tier — inbound
+  latency is expected) gated by a **Gmail label filter** (only mail
+  delivered to `credlytest1+<tag>@gmail.com` gets the `ticketflow` label and
+  enters the pipe) → HTTP POST to `/api/email/inbound` with the Bearer
+  secret. Field mapping notes are above.
+- **Send flow:** Catch Webhook (URL is in `ACTIVEPIECES_SEND_WEBHOOK_URL`
+  on Vercel + .env.local) → Gmail "Send Email". Payload:
+  `{ to, subject, body, replyTo, inReplyTo, references }`; `replyTo` maps
+  to the **Reply-To Email** field (= `support+<tag>@…`, REQUIRED so
+  customer replies come back tagged/labeled); Message-IDs arrive WITH `<>`.
+  Outbound is instant (webhook-triggered).
+- Full loop verified live by Azi 2026-06-10 (in → reply → customer reply
+  appends; echo guard keeps our own sent mail out).
 >
 > **DB is safe across deploys:** verified nothing in build/deploy touches the
 > database — no seed/migration runs on Vercel. `next build` is the only build
