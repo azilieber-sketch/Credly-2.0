@@ -5,10 +5,9 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import SourceIcon, { SOURCE_COLORS, SOURCE_LABELS } from "@/app/_components/SourceIcon";
 import { supabase } from "@/app/_lib/supabase";
 import { PLANS } from "@/app/_lib/store";
+import { TicketStatus, TICKET_STATUS_CFG as STATUS_CFG, ATTENTION_STATUSES } from "@/app/_lib/ticket-status";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
-
-type TicketStatus = "open" | "in-progress" | "resolved";
 
 interface Ticket {
   id: string;
@@ -30,12 +29,6 @@ interface CompanyData {
 // ── Config ─────────────────────────────────────────────────────────────────────
 
 const SOURCES = ["gmail", "instagram", "shopify", "slack", "unknown"] as const;
-
-const STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
-  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
-  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500"  },
-  resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -207,7 +200,7 @@ export default function DashboardPage() {
 
   // ── Computed metrics ────────────────────────────────────────────────────────
 
-  const openCount = tickets.filter((t) => t.status === "open").length;
+  const openCount = tickets.filter((t) => ATTENTION_STATUSES.includes(t.status)).length;
 
   const weekMs = 7 * 24 * 3600000;
   const resolvedThisWeek = tickets.filter(
@@ -415,7 +408,7 @@ export default function DashboardPage() {
         ) : (
           <div className="divide-y divide-stone-100">
             {recentTickets.map((ticket) => {
-              const st = STATUS_CFG[ticket.status] ?? STATUS_CFG.open;
+              const st = STATUS_CFG[ticket.status] ?? STATUS_CFG.new;
               return (
                 <div key={ticket.id} className="flex items-start gap-3.5 px-5 py-4">
                   <div className="flex-shrink-0 mt-0.5">

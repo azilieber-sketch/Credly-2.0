@@ -72,6 +72,31 @@ Gmail OAuth code is PARKED as a future premium feature (banner comments on
 - **Existing company "azi" was given routing tag `azi`** (predated the
   migration, so its tag was NULL; set via SQL).
 
+### Update (2026-06-10, later): loop CONFIRMED end-to-end + status model rework
+- ✅ Full loop verified live by Azi: inbound → ticket, admin reply → customer
+  inbox (via AP send flow + Reply-To `support+<tag>@…`), customer reply →
+  appends to the same ticket.
+- ✅ **Echo guard:** Gmail labels whole conversations, so the AP trigger can
+  re-emit our OWN outbound reply → it became a phantom 1-message ticket
+  (looked like "conversation history disappeared" — the real thread was
+  intact). Webhook now drops mail whose sender == `SUPPORT_FROM_EMAIL`;
+  phantom ticket deleted.
+- ✅ **New status model** (migration `20260610150000_ticket_status_model`,
+  remapped open→new, in-progress→read): `new` → `read` (auto on admin open)
+  → `answered` (auto on admin reply — **replying no longer resolves**) →
+  `customer-replied` (auto on inbound append, from ANY status incl.
+  resolved) → `resolved` (**manual Resolve button only**).
+- ✅ Shared config `app/_lib/ticket-status.ts` (TICKET_STATUS_CFG +
+  ATTENTION_STATUSES = new/read/customer-replied) replaces 5 duplicated
+  per-page configs. **Urgency/priority UI removed everywhere** (filters,
+  sorts, badges, dots, KPI tiles — replaced by status). ⚠️ The `priority`
+  DB column still EXISTS (dropping = destructive, needs Azi's approval);
+  inserts still write `medium`.
+- ✅ Conversation threads (`messages`) now render in ALL ticket views:
+  admin company detail, admin Global Inbox (also routes email replies via
+  the reply endpoint now), and the client portal (read-only). Legacy
+  description+reply view kept for pre-pipeline tickets.
+
 ### Remaining to go live (send half)
 1. **Send flow in ActivePieces:** Webhook trigger → Gmail "Send Email"
    mapping to/subject/body + In-Reply-To/References from the webhook payload

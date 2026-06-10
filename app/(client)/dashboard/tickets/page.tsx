@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import SourceIcon from "@/app/_components/SourceIcon";
 import { supabase } from "@/app/_lib/supabase";
+import { TicketStatus, TICKET_STATUS_CFG as STATUS_CFG, ATTENTION_STATUSES } from "@/app/_lib/ticket-status";
 
 type IssueCategory = "billing" | "technical" | "general";
-type Priority      = "low" | "medium" | "high";
-type TicketStatus  = "open" | "in-progress" | "resolved";
 
 interface Ticket {
   id: string;
@@ -14,7 +13,6 @@ interface Ticket {
   company_name: string;
   email: string;
   issue_category: IssueCategory;
-  priority: Priority;
   description: string;
   status: TicketStatus;
   created_at: string;
@@ -23,34 +21,37 @@ interface Ticket {
   source: string | null;
 }
 
+interface Message {
+  id: string;
+  ticket_id: string;
+  direction: "inbound" | "outbound";
+  from_email: string;
+  subject: string | null;
+  body_text: string | null;
+  status: "received" | "draft" | "sent" | "failed";
+  created_at: string;
+}
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
-const STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
-  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
-  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500"  },
-  resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-};
+type StatusFilter = "all" | "open" | "answered" | "resolved";
 
-const PRIORITY_DOT: Record<Priority, string> = {
-  low:    "bg-stone-300",
-  medium: "bg-amber-400",
-  high:   "bg-red-500",
+// Client-friendly grouping: "open" = anything still in the support queue.
+const FILTER_STATUSES: Record<Exclude<StatusFilter, "all">, TicketStatus[]> = {
+  open:     ["new", "read", "customer-replied"],
+  answered: ["answered"],
+  resolved: ["resolved"],
 };
-
-const PRIORITY_BADGE: Record<Priority, string> = {
-  low:    "bg-stone-50 text-stone-500",
-  medium: "bg-amber-50 text-amber-600",
-  high:   "bg-red-50 text-red-600",
-};
-
-type StatusFilter = TicketStatus | "all";
 
 const FILTERS: { id: StatusFilter; label: string }[] = [
-  { id: "all",         label: "All"         },
-  { id: "open",        label: "Open"        },
-  { id: "in-progress", label: "In Progress" },
-  { id: "resolved",    label: "Resolved"    },
+  { id: "all",      label: "All"      },
+  { id: "open",     label: "Open"     },
+  { id: "answered", label: "Answered" },
+  { id: "resolved", label: "Resolved" },
 ];
+
+const matchesFilter = (t: Ticket, f: StatusFilter) =>
+  f === "all" || FILTER_STATUSES[f].includes(t.status);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -92,6 +93,7 @@ function NotConfigured() {
 
 export default function TicketsPage() {
   const [tickets,  setTickets]  = useState<Ticket[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selected, setSelected] = useState<Ticket | null>(null);
   const [filter,   setFilter]   = useState<StatusFilter>("all");
   const [loading,  setLoading]  = useState(true);
@@ -129,6 +131,14 @@ export default function TicketsPage() {
     });
   }, []);
 
+  // Read-only conversation thread (RLS limits rows to this company's tickets).
+  useEffect(() => {
+    if (!supabase || !selected?.id) { setMessages([]); return; }
+    supabase
+      .from("messages").select("*").eq("ticket_id", selected.id).order("created_at", { ascending: true })
+      .then(({ data }) => setMessages((data as Message[]) ?? []));
+  }, [selected?.id]);
+
   if (!supabase) return <NotConfigured />;
 
   if (noEmail) {
@@ -156,7 +166,7 @@ export default function TicketsPage() {
   // ── Conversation view ───────────────────────────────────────────────────────
 
   if (selected) {
-    const st = STATUS_CFG[selected.status] ?? STATUS_CFG.open;
+    const st = STATUS_CFG[selected.status] ?? STATUS_CFG.new;
     const sentAt = new Date(selected.created_at).toLocaleDateString("en-US", {
       weekday: "short", month: "short", day: "numeric",
       hour: "2-digit", minute: "2-digit",
@@ -186,9 +196,6 @@ export default function TicketsPage() {
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 capitalize">
                 {selected.issue_category}
               </span>
-              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${PRIORITY_BADGE[selected.priority]}`}>
-                {selected.priority}
-              </span>
               <SourceIcon source={selected.source} size={18} />
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${st.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
@@ -199,36 +206,74 @@ export default function TicketsPage() {
         </div>
 
         <div className="flex flex-col gap-3 mb-4">
-          <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-stone-600 flex-shrink-0">
-                {initials}
+          {messages.length > 0 ? (
+            // Full conversation, chronological, read-only.
+            messages.map((m) => {
+              const when = new Date(m.created_at).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              });
+              return m.direction === "inbound" ? (
+                <div key={m.id} className="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-stone-600 flex-shrink-0">
+                      {m.from_email.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-900 break-all">{m.from_email}</p>
+                      <p className="text-[11px] text-stone-400">{when}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{m.body_text}</p>
+                </div>
+              ) : (
+                <div key={m.id} className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 ml-6 sm:ml-10">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                      ST
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-900">Support Team</p>
+                      <p className="text-[11px] text-stone-400">{when}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{m.body_text}</p>
+                </div>
+              );
+            })
+          ) : (
+            <>
+              <div className="bg-white rounded-2xl border border-stone-100 shadow-sm p-5">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-stone-600 flex-shrink-0">
+                    {initials}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900">{selected.company_name}</p>
+                    <p className="text-[11px] text-stone-400">{sentAt}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-900">{selected.company_name}</p>
-                <p className="text-[11px] text-stone-400">{sentAt}</p>
-              </div>
-            </div>
-            <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
-          </div>
 
-          {selected.reply && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 ml-6 sm:ml-10">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
-                  ST
+              {selected.reply && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 ml-6 sm:ml-10">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                      ST
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-gray-900">Support Team</p>
+                      <p className="text-[11px] text-stone-400">{selected.replied_at ? timeAgo(selected.replied_at) : ""}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{selected.reply}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-gray-900">Support Team</p>
-                  <p className="text-[11px] text-stone-400">{selected.replied_at ? timeAgo(selected.replied_at) : ""}</p>
-                </div>
-              </div>
-              <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{selected.reply}</p>
-            </div>
+              )}
+            </>
           )}
         </div>
 
-        {!selected.reply && (
+        {messages.length === 0 && !selected.reply && (
           <div className="bg-stone-50 border border-stone-100 rounded-2xl p-5 text-center">
             <p className="text-sm text-stone-400">Awaiting response from our support team.</p>
           </div>
@@ -239,8 +284,8 @@ export default function TicketsPage() {
 
   // ── Inbox view ──────────────────────────────────────────────────────────────
 
-  const filtered  = filter === "all" ? tickets : tickets.filter((t) => t.status === filter);
-  const openCount = tickets.filter((t) => t.status === "open").length;
+  const filtered  = tickets.filter((t) => matchesFilter(t, filter));
+  const openCount = tickets.filter((t) => ATTENTION_STATUSES.includes(t.status)).length;
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-10">
@@ -258,7 +303,7 @@ export default function TicketsPage() {
 
       <div className="flex gap-1 mb-5 overflow-x-auto pb-1">
         {FILTERS.map((f) => {
-          const count = f.id === "all" ? tickets.length : tickets.filter((t) => t.status === f.id).length;
+          const count = tickets.filter((t) => matchesFilter(t, f.id)).length;
           return (
             <button
               key={f.id}
@@ -294,7 +339,7 @@ export default function TicketsPage() {
         ) : (
           <div className="divide-y divide-stone-100">
             {filtered.map((ticket) => {
-              const st      = STATUS_CFG[ticket.status] ?? STATUS_CFG.open;
+              const st      = STATUS_CFG[ticket.status] ?? STATUS_CFG.new;
               const hasReply = ticket.reply !== null;
               return (
                 <button
@@ -302,7 +347,7 @@ export default function TicketsPage() {
                   onClick={() => setSelected(ticket)}
                   className="w-full text-left px-5 py-4 hover:bg-stone-50/80 transition-colors flex items-start gap-3.5 group"
                 >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${PRIORITY_DOT[ticket.priority]}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${st.dot}`} />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">

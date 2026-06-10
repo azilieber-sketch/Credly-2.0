@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   const fromEmail  = extractEmails(body.from)[0] ?? null;
+  const supportEmail = (process.env.SUPPORT_FROM_EMAIL ?? "").toLowerCase();
   const toRaw      = typeof body.to === "string" ? body.to : "";
   const subject    = typeof body.subject === "string" ? body.subject : "";
   const bodyText   = typeof body.text === "string" ? body.text : "";
@@ -81,6 +82,13 @@ export async function POST(req: NextRequest) {
 
   if (!fromEmail) {
     return NextResponse.json({ error: "Missing or unparseable 'from' address." }, { status: 400 });
+  }
+
+  // Echo guard: Gmail labels whole conversations, so the trigger can emit our
+  // OWN outbound replies back at us. Mail from the support address is never a
+  // customer message — drop it before it becomes a phantom ticket.
+  if (supportEmail && fromEmail === supportEmail) {
+    return NextResponse.json({ ok: true, skipped: "own outbound echo" });
   }
 
   const supabase = getServiceSupabase();
@@ -170,7 +178,7 @@ export async function POST(req: NextRequest) {
         issue_category: "general",
         priority:       "medium",
         description:    `Subject: ${subject || "(no subject)"}\n\n${bodyText}`.trim(),
-        status:         "open",
+        status:         "new",
         source:         "email",
       })
       .select("id")
@@ -207,11 +215,10 @@ export async function POST(req: NextRequest) {
   // ── Refresh the ticket's thread state ──────────────────────────────────────
   const ticketUpdate: Record<string, unknown> = { customer_email: fromEmail };
   if (messageId) ticketUpdate.last_inbound_message_id = messageId;
+  // Any inbound append flags the ticket as needing attention again — resolve
+  // is manual-only, so even resolved tickets flip to customer-replied.
+  if (!createdTicket) ticketUpdate.status = "customer-replied";
   await supabase.from("tickets").update(ticketUpdate).eq("id", ticketId);
-  if (!createdTicket) {
-    // A customer reply reopens a resolved ticket (but leaves in-progress alone).
-    await supabase.from("tickets").update({ status: "open" }).eq("id", ticketId).eq("status", "resolved");
-  }
 
   return NextResponse.json({
     ok: true,

@@ -4,9 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { supabase } from "@/app/_lib/supabase";
 import SourceIcon from "@/app/_components/SourceIcon";
-
-type Priority    = "low" | "medium" | "high";
-type TicketStatus = "open" | "in-progress" | "resolved";
+import { TicketStatus, TICKET_STATUS_CFG as STATUS_CFG, ATTENTION_STATUSES } from "@/app/_lib/ticket-status";
 
 interface Ticket {
   id: string;
@@ -14,7 +12,6 @@ interface Ticket {
   company_name: string;
   email: string;
   issue_category: string;
-  priority: Priority;
   description: string;
   status: TicketStatus;
   created_at: string;
@@ -53,24 +50,6 @@ function timeAgo(iso: string): string {
   return `${days}d ago`;
 }
 
-const PRIORITY_DOT: Record<Priority, string> = {
-  low:    "bg-stone-300",
-  medium: "bg-amber-400",
-  high:   "bg-red-500",
-};
-
-const PRIORITY_BADGE: Record<Priority, string> = {
-  low:    "bg-stone-50 text-stone-500",
-  medium: "bg-amber-50 text-amber-600",
-  high:   "bg-red-50 text-red-600",
-};
-
-const STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
-  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
-  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500"  },
-  resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-};
-
 export default function AdminOverview() {
   const [tickets,   setTickets]   = useState<Ticket[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -105,19 +84,19 @@ export default function AdminOverview() {
   const now   = Date.now();
   const today = new Date(); today.setHours(0, 0, 0, 0);
 
-  const openTickets      = tickets.filter((t) => t.status === "open");
-  const highPriority     = tickets.filter((t) => t.priority === "high" && t.status !== "resolved");
+  const openTickets      = tickets.filter((t) => ATTENTION_STATUSES.includes(t.status));
+  const customerReplied  = tickets.filter((t) => t.status === "customer-replied");
   const resolvedToday    = tickets.filter((t) => t.status === "resolved" && t.replied_at && new Date(t.replied_at) >= today);
   const companiesWaiting = companies.filter((co) =>
-    tickets.some((t) => t.company_id === co.id && t.status === "open" && now - new Date(t.created_at).getTime() > 86400000)
+    tickets.some((t) => t.company_id === co.id && ATTENTION_STATUSES.includes(t.status) && now - new Date(t.created_at).getTime() > 86400000)
   );
 
   const companyRows = companies.map((co) => {
-    const coTickets = tickets.filter((t) => t.company_id === co.id);
-    const openCount = coTickets.filter((t) => t.status === "open").length;
-    const hasHigh   = coTickets.some((t) => t.priority === "high" && t.status !== "resolved");
-    const last      = coTickets[0]?.created_at ?? null;
-    const indicator = hasHigh ? "red" : openCount > 0 ? "amber" : "green";
+    const coTickets  = tickets.filter((t) => t.company_id === co.id);
+    const openCount  = coTickets.filter((t) => ATTENTION_STATUSES.includes(t.status)).length;
+    const hasReplied = coTickets.some((t) => t.status === "customer-replied");
+    const last       = coTickets[0]?.created_at ?? null;
+    const indicator  = hasReplied ? "red" : openCount > 0 ? "amber" : "green";
     return { ...co, openCount, indicator, last };
   }).sort((a, b) => {
     const o = { red: 0, amber: 1, green: 2 } as const;
@@ -142,16 +121,16 @@ export default function AdminOverview() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
         {[
           {
-            label: "Open Tickets",
+            label: "Needs Attention",
             value: loading ? "—" : openTickets.length.toString(),
             sub: "Across all companies",
             color: !loading && openTickets.length > 0 ? "text-amber-500" : "text-zinc-900",
           },
           {
-            label: "High Priority",
-            value: loading ? "—" : highPriority.length.toString(),
-            sub: "Need attention now",
-            color: !loading && highPriority.length > 0 ? "text-red-500" : "text-zinc-900",
+            label: "Customer Replied",
+            value: loading ? "—" : customerReplied.length.toString(),
+            sub: "Awaiting your answer",
+            color: !loading && customerReplied.length > 0 ? "text-rose-500" : "text-zinc-900",
           },
           {
             label: "Resolved Today",
@@ -296,14 +275,11 @@ export default function AdminOverview() {
                   href={`/admin/companies/${ticket.company_id}`}
                   className="flex items-center gap-3 px-5 py-3.5 hover:bg-zinc-50 transition-colors group"
                 >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${PRIORITY_DOT[ticket.priority]}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
                   <SourceIcon source={ticket.source} size={14} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.company_name}</p>
-                      <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full capitalize flex-shrink-0 ${PRIORITY_BADGE[ticket.priority]}`}>
-                        {ticket.priority}
-                      </span>
                     </div>
                     <p className="text-xs text-zinc-500 truncate">{ticket.description}</p>
                   </div>

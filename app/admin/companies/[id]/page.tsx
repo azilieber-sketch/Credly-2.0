@@ -9,6 +9,7 @@ import {
   getAdminInvoices, saveAdminInvoices, getActivityLogs, addActivityLog,
   AdminInvoice, ActivityLog, Plan, PLANS, nextInvoiceId, formatDate, timeAgo,
 } from "@/app/_lib/store";
+import { TicketStatus, TICKET_STATUS_CFG, ATTENTION_STATUSES } from "@/app/_lib/ticket-status";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -36,8 +37,6 @@ function getCompanyStatus(co: SupabaseCompany): CompanyStatus {
 }
 
 type IssueCategory = "billing" | "technical" | "general";
-type Priority = "low" | "medium" | "high";
-type TicketStatus = "open" | "in-progress" | "resolved";
 
 interface Ticket {
   id: string;
@@ -45,7 +44,6 @@ interface Ticket {
   company_name: string;
   email: string;
   issue_category: IssueCategory;
-  priority: Priority;
   description: string;
   status: TicketStatus;
   created_at: string;
@@ -147,25 +145,14 @@ const BREAKDOWN = [
   { label: "Inquiries", ratio: 0.21, color: "bg-sky-400"    },
 ];
 
-const TICKET_STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
-  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
-  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500"  },
-  resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-};
-
-const PRIORITY_DOT: Record<Priority, string> = {
-  low:    "bg-stone-300",
-  medium: "bg-amber-400",
-  high:   "bg-red-500",
-};
-
 type TicketFilter = TicketStatus | "all";
 
 const TICKET_FILTERS: { id: TicketFilter; label: string }[] = [
-  { id: "all",         label: "All"         },
-  { id: "open",        label: "Open"        },
-  { id: "in-progress", label: "In Progress" },
-  { id: "resolved",    label: "Resolved"    },
+  { id: "all",              label: "All"              },
+  { id: "new",              label: "New"              },
+  { id: "customer-replied", label: "Customer replied" },
+  { id: "answered",         label: "Answered"         },
+  { id: "resolved",         label: "Resolved"         },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -384,6 +371,27 @@ export default function CompanyDetailPage() {
     else setMessages([]);
   }, [selectedTicket?.id, loadMessages]);
 
+  // Opening a new ticket marks it read (auto). Other statuses are untouched —
+  // customer-replied stays visible until the admin actually answers.
+  useEffect(() => {
+    if (!supabase || !selectedTicket || selectedTicket.status !== "new") return;
+    supabase.from("tickets").update({ status: "read" }).eq("id", selectedTicket.id).then(() => {
+      setTickets((prev) => prev.map((t) => (t.id === selectedTicket.id ? { ...t, status: "read" as TicketStatus } : t)));
+      setSelectedTicket((prev) => (prev && prev.id === selectedTicket.id ? { ...prev, status: "read" } : prev));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTicket?.id]);
+
+  // Resolve is MANUAL only — nothing else sets this status.
+  const handleResolve = async () => {
+    if (!selectedTicket || !supabase) return;
+    await supabase.from("tickets").update({ status: "resolved" }).eq("id", selectedTicket.id);
+    const updated: Ticket = { ...selectedTicket, status: "resolved" };
+    setTickets((prev) => prev.map((t) => (t.id === selectedTicket.id ? updated : t)));
+    setSelectedTicket(updated);
+    showToast("Ticket resolved");
+  };
+
   const handleIssueCredits = async (plan: Plan) => {
     if (!company || !supabase) return;
     await supabase.from("companies").update({ credits: company.credits + plan.credits }).eq("id", id);
@@ -507,11 +515,11 @@ export default function CompanyDetailPage() {
       if (errMsg) { showToast(errMsg); return; }
 
       const now = new Date().toISOString();
-      const updated: Ticket = { ...selectedTicket, reply: replyText.trim(), replied_at: now, status: "resolved" };
+      const updated: Ticket = { ...selectedTicket, reply: replyText.trim(), replied_at: now, status: "answered" };
       setTickets((prev) => prev.map((t) => (t.id === selectedTicket.id ? updated : t)));
       setSelectedTicket(updated);
       setReplyText("");
-      showToast("Reply sent — ticket resolved");
+      showToast("Reply sent");
       return;
     }
 
@@ -527,13 +535,13 @@ export default function CompanyDetailPage() {
     await supabase.from("tickets").update({
       reply: replyText.trim(),
       replied_at: now,
-      status: "resolved",
+      status: "answered",
     }).eq("id", selectedTicket.id);
-    const updated: Ticket = { ...selectedTicket, reply: replyText.trim(), replied_at: now, status: "resolved" };
+    const updated: Ticket = { ...selectedTicket, reply: replyText.trim(), replied_at: now, status: "answered" };
     setTickets((prev) => prev.map((t) => (t.id === selectedTicket.id ? updated : t)));
     setSelectedTicket(updated);
     setReplyText("");
-    showToast("Reply sent — ticket resolved");
+    showToast("Reply sent");
   };
 
   const suggestReply = () => {
@@ -624,18 +632,19 @@ export default function CompanyDetailPage() {
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-600 capitalize">
                 {selectedTicket.issue_category}
               </span>
-              <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${
-                selectedTicket.priority === "high" ? "bg-red-50 text-red-600" :
-                selectedTicket.priority === "medium" ? "bg-amber-50 text-amber-600" :
-                "bg-zinc-50 text-zinc-500"
-              }`}>
-                {selectedTicket.priority}
-              </span>
               <SourceIcon source={selectedTicket.source} size={18} />
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${st.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                 {st.label}
               </span>
+              {selectedTicket.status !== "resolved" && (
+                <button
+                  onClick={handleResolve}
+                  className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full hover:bg-emerald-100 transition-colors"
+                >
+                  ✓ Resolve
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -767,14 +776,14 @@ export default function CompanyDetailPage() {
 
   const filteredTickets = ticketFilter === "all" ? tickets : tickets.filter((t) => t.status === ticketFilter);
 
-  const openTicketCount   = tickets.filter((t) => t.status === "open").length;
+  const attentionCount    = tickets.filter((t) => ATTENTION_STATUSES.includes(t.status)).length;
   const lastWeek          = new Date(Date.now() - 7 * 86400000);
   const resolvedThisWeek  = tickets.filter((t) => t.status === "resolved" && t.replied_at && new Date(t.replied_at) >= lastWeek).length;
   const resolvedWithTimes = tickets.filter((t) => t.status === "resolved" && !!t.replied_at);
   const avgResponseHours  = resolvedWithTimes.length > 0
     ? Math.round(resolvedWithTimes.reduce((s, t) => s + (new Date(t.replied_at!).getTime() - new Date(t.created_at).getTime()), 0) / resolvedWithTimes.length / 3600000)
     : null;
-  const highPriCount      = tickets.filter((t) => t.priority === "high" && t.status !== "resolved").length;
+  const customerReplied   = tickets.filter((t) => t.status === "customer-replied").length;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
@@ -929,10 +938,10 @@ export default function CompanyDetailPage() {
       {/* Ticket stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-5">
         {[
-          { label: "Open Tickets",       value: openTicketCount.toString(),                              sub: "Awaiting reply",     color: openTicketCount > 0 ? "text-amber-500" : "text-zinc-900" },
+          { label: "Needs Attention",    value: attentionCount.toString(),                               sub: "New, read, or replied", color: attentionCount > 0 ? "text-amber-500" : "text-zinc-900" },
           { label: "Resolved This Week", value: resolvedThisWeek.toString(),                             sub: "Last 7 days",        color: "text-emerald-600" },
           { label: "Avg Response",       value: avgResponseHours !== null ? `${avgResponseHours}h` : "—", sub: "Hours to resolve",   color: "text-zinc-900" },
-          { label: "High Priority",      value: highPriCount.toString(),                                 sub: "Need attention",     color: highPriCount > 0 ? "text-red-500" : "text-zinc-900" },
+          { label: "Customer Replied",   value: customerReplied.toString(),                              sub: "Awaiting your answer", color: customerReplied > 0 ? "text-rose-500" : "text-zinc-900" },
         ].map((s) => (
           <div key={s.label} className="bg-white rounded-xl border border-zinc-200 p-4 sm:p-5">
             <p className="text-[10px] sm:text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">{s.label}</p>
@@ -996,7 +1005,7 @@ export default function CompanyDetailPage() {
                   onClick={() => { setSelectedTicket(ticket); setReplyText(""); }}
                   className="w-full text-left px-5 py-4 hover:bg-zinc-50 transition-colors flex items-start gap-3.5 group"
                 >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${PRIORITY_DOT[ticket.priority]}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${tst.dot}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.company_name}</p>

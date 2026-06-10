@@ -3,9 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/app/_lib/supabase";
 import SourceIcon from "@/app/_components/SourceIcon";
-
-type Priority     = "low" | "medium" | "high";
-type TicketStatus = "open" | "in-progress" | "resolved";
+import { TicketStatus, TICKET_STATUS_CFG as STATUS_CFG, ATTENTION_STATUSES } from "@/app/_lib/ticket-status";
 
 interface Ticket {
   id: string;
@@ -13,7 +11,6 @@ interface Ticket {
   company_name: string;
   email: string;
   issue_category: "billing" | "technical" | "general";
-  priority: Priority;
   description: string;
   status: TicketStatus;
   created_at: string;
@@ -22,29 +19,19 @@ interface Ticket {
   source: string | null;
 }
 
-// ── Config ────────────────────────────────────────────────────────────────────
+interface Message {
+  id: string;
+  ticket_id: string;
+  direction: "inbound" | "outbound";
+  from_email: string;
+  to_email: string;
+  subject: string | null;
+  body_text: string | null;
+  status: "received" | "draft" | "sent" | "failed";
+  created_at: string;
+}
 
-const STATUS_CFG: Record<TicketStatus, { label: string; badge: string; dot: string }> = {
-  open:          { label: "Open",        badge: "bg-amber-50 text-amber-700",     dot: "bg-amber-400"   },
-  "in-progress": { label: "In Progress", badge: "bg-indigo-50 text-indigo-700",   dot: "bg-indigo-500"  },
-  resolved:      { label: "Resolved",    badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
-};
-
-const PRIORITY_DOT: Record<Priority, string> = {
-  low:    "bg-stone-300",
-  medium: "bg-amber-400",
-  high:   "bg-red-500",
-};
-
-const PRIORITY_BADGE: Record<Priority, string> = {
-  low:    "bg-stone-50 text-stone-500",
-  medium: "bg-amber-50 text-amber-600",
-  high:   "bg-red-50 text-red-600",
-};
-
-type SortKey = "newest" | "oldest" | "priority" | "company";
-
-const PRIORITY_ORDER: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
+type SortKey = "newest" | "oldest" | "company";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -81,6 +68,7 @@ function buildAIDraft(ticket: Ticket): string {
 
 export default function AdminTicketsPage() {
   const [tickets,        setTickets]        = useState<Ticket[]>([]);
+  const [messages,       setMessages]       = useState<Message[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [selected,       setSelected]       = useState<Ticket | null>(null);
   const [replyText,      setReplyText]      = useState("");
@@ -90,7 +78,6 @@ export default function AdminTicketsPage() {
 
   // Filters
   const [statusFilter,   setStatusFilter]   = useState<TicketStatus | "all">("all");
-  const [priorityFilter, setPriorityFilter] = useState<Priority | "all">("all");
   const [sourceFilter,   setSourceFilter]   = useState<string>("all");
   const [companyFilter,  setCompanyFilter]  = useState<string>("all");
   const [sortKey,        setSortKey]        = useState<SortKey>("newest");
@@ -121,6 +108,40 @@ export default function AdminTicketsPage() {
     return () => { supabase!.removeChannel(channel); };
   }, [load]);
 
+  // Full conversation thread for the open ticket (email-pipeline tickets
+  // store every turn in `messages`; older tickets fall back to description+reply).
+  const loadMessages = useCallback(async (ticketId: string) => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("messages").select("*").eq("ticket_id", ticketId).order("created_at", { ascending: true });
+    setMessages((data as Message[]) ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (selected?.id) loadMessages(selected.id);
+    else setMessages([]);
+  }, [selected?.id, loadMessages]);
+
+  // Opening a new ticket marks it read (auto). Other statuses untouched.
+  useEffect(() => {
+    if (!supabase || !selected || selected.status !== "new") return;
+    supabase.from("tickets").update({ status: "read" }).eq("id", selected.id).then(() => {
+      setTickets((prev) => prev.map((t) => (t.id === selected.id ? { ...t, status: "read" as TicketStatus } : t)));
+      setSelected((prev) => (prev && prev.id === selected.id ? { ...prev, status: "read" } : prev));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id]);
+
+  // Resolve is MANUAL only — nothing else sets this status.
+  const handleResolve = async () => {
+    if (!selected || !supabase) return;
+    await supabase.from("tickets").update({ status: "resolved" }).eq("id", selected.id);
+    const updated: Ticket = { ...selected, status: "resolved" };
+    setTickets((prev) => prev.map((t) => (t.id === selected.id ? updated : t)));
+    setSelected(updated);
+    showToast("Ticket resolved");
+  };
+
   // ── Derived ──────────────────────────────────────────────────────────────────
 
   const companies = Array.from(new Set(tickets.map((t) => t.company_name))).sort();
@@ -128,13 +149,11 @@ export default function AdminTicketsPage() {
 
   const filtered = tickets
     .filter((t) => statusFilter   === "all" || t.status   === statusFilter)
-    .filter((t) => priorityFilter === "all" || t.priority === priorityFilter)
     .filter((t) => sourceFilter   === "all" || (t.source ?? "unknown") === sourceFilter)
     .filter((t) => companyFilter  === "all" || t.company_name === companyFilter)
     .sort((a, b) => {
       if (sortKey === "newest")   return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       if (sortKey === "oldest")   return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      if (sortKey === "priority") return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
       if (sortKey === "company")  return a.company_name.localeCompare(b.company_name);
       return 0;
     });
@@ -144,6 +163,34 @@ export default function AdminTicketsPage() {
   const handleSendReply = async () => {
     if (!replyText.trim() || !selected || !supabase) return;
     setSending(true);
+
+    // Email-pipeline tickets send through ActivePieces via the reply route
+    // (stores the outbound message + sets status to answered server-side).
+    if (selected.source === "email") {
+      const { data: { session } } = await supabase.auth.getSession();
+      let errMsg: string | null = null;
+      try {
+        const res = await fetch(`/api/tickets/${selected.id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+          body: JSON.stringify({ body: replyText.trim() }),
+        });
+        if (!res.ok) errMsg = (await res.json().catch(() => ({})))?.error ?? "Reply failed to send.";
+      } catch {
+        errMsg = "Network error — reply not sent.";
+      }
+      setSending(false);
+      await loadMessages(selected.id);
+      if (errMsg) { showToast(errMsg); return; }
+
+      const now = new Date().toISOString();
+      const updated: Ticket = { ...selected, reply: replyText.trim(), replied_at: now, status: "answered" };
+      setTickets((prev) => prev.map((t) => (t.id === selected.id ? updated : t)));
+      setSelected(updated);
+      setReplyText("");
+      showToast("Reply sent");
+      return;
+    }
 
     if (selected.source === "gmail") {
       await fetch("/api/integrations/gmail/reply", {
@@ -155,14 +202,14 @@ export default function AdminTicketsPage() {
 
     const now = new Date().toISOString();
     await supabase.from("tickets").update({
-      reply: replyText.trim(), replied_at: now, status: "resolved",
+      reply: replyText.trim(), replied_at: now, status: "answered",
     }).eq("id", selected.id);
-    const updated: Ticket = { ...selected, reply: replyText.trim(), replied_at: now, status: "resolved" };
+    const updated: Ticket = { ...selected, reply: replyText.trim(), replied_at: now, status: "answered" };
     setTickets((prev) => prev.map((t) => (t.id === selected.id ? updated : t)));
     setSelected(updated);
     setReplyText("");
     setSending(false);
-    showToast("Reply sent — ticket resolved");
+    showToast("Reply sent");
   };
 
   const suggestReply = () => {
@@ -210,45 +257,96 @@ export default function AdminTicketsPage() {
               <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-zinc-100 text-zinc-600 capitalize">
                 {selected.issue_category}
               </span>
-              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize ${PRIORITY_BADGE[selected.priority]}`}>
-                {selected.priority}
-              </span>
               <SourceIcon source={selected.source} size={18} />
               <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${st.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${st.dot}`} />
                 {st.label}
               </span>
+              {selected.status !== "resolved" && (
+                <button
+                  onClick={handleResolve}
+                  className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full hover:bg-emerald-100 transition-colors"
+                >
+                  ✓ Resolve
+                </button>
+              )}
             </div>
           </div>
         </div>
 
         <div className="flex flex-col gap-3 mb-4">
-          <div className="bg-white rounded-xl border border-zinc-200 p-5">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
-                {initials}
+          {messages.length > 0 ? (
+            // Email-pipeline thread: every turn lives in `messages`, chronological.
+            messages.map((m) => {
+              const when = new Date(m.created_at).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              });
+              return m.direction === "inbound" ? (
+                <div key={m.id} className="bg-white rounded-xl border border-zinc-200 p-5">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
+                      {m.from_email.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-900 break-all">{m.from_email}</p>
+                      <p className="text-[11px] text-zinc-400">{when}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{m.body_text}</p>
+                </div>
+              ) : (
+                <div key={m.id} className={`rounded-xl p-5 ml-6 sm:ml-10 border ${
+                  m.status === "failed" ? "bg-red-50 border-red-200" : "bg-indigo-50 border-indigo-100"
+                }`}>
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                      A
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-zinc-900">Support Agent</p>
+                      <p className="text-[11px] text-zinc-400">{when}</p>
+                    </div>
+                    {m.status === "failed" && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Failed to send</span>
+                    )}
+                    {m.status === "draft" && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Sending…</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{m.body_text}</p>
+                </div>
+              );
+            })
+          ) : (
+            <>
+              <div className="bg-white rounded-xl border border-zinc-200 p-5">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
+                    {initials}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-900">{selected.company_name}</p>
+                    <p className="text-[11px] text-zinc-400">{sentAt}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-zinc-900">{selected.company_name}</p>
-                <p className="text-[11px] text-zinc-400">{sentAt}</p>
-              </div>
-            </div>
-            <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selected.description}</p>
-          </div>
 
-          {selected.reply && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 ml-6 sm:ml-10">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
-                  A
+              {selected.reply && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 ml-6 sm:ml-10">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                      A
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-900">Support Agent</p>
+                      <p className="text-[11px] text-zinc-400">{selected.replied_at ? timeAgo(selected.replied_at) : ""}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selected.reply}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-zinc-900">Support Agent</p>
-                  <p className="text-[11px] text-zinc-400">{selected.replied_at ? timeAgo(selected.replied_at) : ""}</p>
-                </div>
-              </div>
-              <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selected.reply}</p>
-            </div>
+              )}
+            </>
           )}
         </div>
 
@@ -293,8 +391,8 @@ export default function AdminTicketsPage() {
 
   // ── Inbox view ────────────────────────────────────────────────────────────────
 
-  const openCount = tickets.filter((t) => t.status === "open").length;
-  const highCount = tickets.filter((t) => t.priority === "high" && t.status !== "resolved").length;
+  const attentionCount = tickets.filter((t) => ATTENTION_STATUSES.includes(t.status)).length;
+  const repliedCount   = tickets.filter((t) => t.status === "customer-replied").length;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 sm:px-6 md:px-8 md:py-8">
@@ -311,8 +409,8 @@ export default function AdminTicketsPage() {
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Global Inbox</h1>
             <p className="text-sm text-zinc-400 mt-0.5">
-              {openCount} open · {highCount > 0 && <span className="text-red-500 font-medium">{highCount} high priority</span>}
-              {highCount === 0 && "no high priority"} · {tickets.length} total
+              {attentionCount} need attention · {repliedCount > 0 && <span className="text-rose-500 font-medium">{repliedCount} customer replied</span>}
+              {repliedCount === 0 && "no customer replies waiting"} · {tickets.length} total
             </p>
           </div>
           <div className="flex items-center gap-1.5">
@@ -341,21 +439,11 @@ export default function AdminTicketsPage() {
           className="text-xs border border-zinc-200 rounded-lg px-2.5 py-2 bg-white text-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
         >
           <option value="all">All statuses</option>
-          <option value="open">Open</option>
-          <option value="in-progress">In Progress</option>
+          <option value="new">New</option>
+          <option value="read">Read</option>
+          <option value="answered">Answered</option>
+          <option value="customer-replied">Customer replied</option>
           <option value="resolved">Resolved</option>
-        </select>
-
-        {/* Priority */}
-        <select
-          value={priorityFilter}
-          onChange={(e) => setPriorityFilter(e.target.value as Priority | "all")}
-          className="text-xs border border-zinc-200 rounded-lg px-2.5 py-2 bg-white text-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-300"
-        >
-          <option value="all">All priorities</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
         </select>
 
         {/* Source */}
@@ -377,7 +465,6 @@ export default function AdminTicketsPage() {
           >
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
-            <option value="priority">By priority</option>
             <option value="company">By company</option>
           </select>
         </div>
@@ -407,14 +494,11 @@ export default function AdminTicketsPage() {
                   onClick={() => { setSelected(ticket); setReplyText(""); }}
                   className="w-full text-left px-5 py-4 hover:bg-zinc-50/80 transition-colors flex items-start gap-3 group"
                 >
-                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${PRIORITY_DOT[ticket.priority]}`} />
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 mt-[7px] ${st.dot}`} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="text-sm font-semibold text-zinc-900 truncate">{ticket.company_name}</p>
-                        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full capitalize flex-shrink-0 ${PRIORITY_BADGE[ticket.priority]}`}>
-                          {ticket.priority}
-                        </span>
                       </div>
                       <span className="text-[11px] text-zinc-400 flex-shrink-0">{timeAgo(ticket.created_at)}</span>
                     </div>

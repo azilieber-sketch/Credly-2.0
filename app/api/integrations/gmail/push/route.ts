@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
         issue_category: "general",
         priority:       "medium",
         description:    `Subject: ${subject}\n\n${bodyText}`.trim(),
-        status:         "open",
+        status:         "new",
         source:         "gmail",
         created_at:     receivedAt,
       });

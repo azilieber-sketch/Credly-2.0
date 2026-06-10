@@ -142,10 +142,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     .eq("id", message.id);
 
   // Keep the legacy ticket fields in step (client portal + stats read these).
+  // Replying marks the ticket answered — resolving is a separate manual action.
   await supabase.from("tickets").update({
     reply:      replyText,
     replied_at: new Date().toISOString(),
-    status:     "resolved",
+    status:     "answered",
   }).eq("id", ticketId);
 
   return NextResponse.json({ ok: true, messageId: message.id });
