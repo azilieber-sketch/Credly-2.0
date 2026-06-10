@@ -61,6 +61,18 @@ interface Integration {
   credentials: Record<string, string>;
 }
 
+interface Message {
+  id: string;
+  ticket_id: string;
+  direction: "inbound" | "outbound";
+  from_email: string;
+  to_email: string;
+  subject: string | null;
+  body_text: string | null;
+  status: "received" | "draft" | "sent" | "failed";
+  created_at: string;
+}
+
 interface IntChannelConfig {
   id: string;
   name: string;
@@ -308,7 +320,9 @@ export default function CompanyDetailPage() {
   const [toast,          setToast]          = useState<string | null>(null);
   const [ticketFilter,   setTicketFilter]   = useState<TicketFilter>("all");
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [messages,       setMessages]       = useState<Message[]>([]);
   const [replyText,      setReplyText]      = useState("");
+  const [sendingReply,   setSendingReply]   = useState(false);
   const [suggesting,     setSuggesting]     = useState(false);
   const [integrations,     setIntegrations]     = useState<Integration[]>([]);
   const [modalIntChannel,  setModalIntChannel]  = useState<string | null>(null);
@@ -355,6 +369,20 @@ export default function CompanyDetailPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Conversation thread for the open ticket (email-pipeline tickets store
+  // every turn in `messages`; older tickets fall back to description+reply).
+  const loadMessages = useCallback(async (ticketId: string) => {
+    if (!supabase) return;
+    const { data } = await supabase
+      .from("messages").select("*").eq("ticket_id", ticketId).order("created_at", { ascending: true });
+    setMessages((data as Message[]) ?? []);
+  }, []);
+
+  useEffect(() => {
+    if (selectedTicket?.id) loadMessages(selectedTicket.id);
+    else setMessages([]);
+  }, [selectedTicket?.id, loadMessages]);
 
   const handleIssueCredits = async (plan: Plan) => {
     if (!company || !supabase) return;
@@ -457,6 +485,35 @@ export default function CompanyDetailPage() {
 
   const handleSendReply = async () => {
     if (!replyText.trim() || !selectedTicket || !supabase) return;
+
+    // Email-pipeline tickets: send through ActivePieces via the reply route
+    // (stores the outbound message + threads it on the customer's side).
+    if (selectedTicket.source === "email") {
+      setSendingReply(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      let errMsg: string | null = null;
+      try {
+        const res = await fetch(`/api/tickets/${selectedTicket.id}/reply`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+          body: JSON.stringify({ body: replyText.trim() }),
+        });
+        if (!res.ok) errMsg = (await res.json().catch(() => ({})))?.error ?? "Reply failed to send.";
+      } catch {
+        errMsg = "Network error — reply not sent.";
+      }
+      setSendingReply(false);
+      await loadMessages(selectedTicket.id);
+      if (errMsg) { showToast(errMsg); return; }
+
+      const now = new Date().toISOString();
+      const updated: Ticket = { ...selectedTicket, reply: replyText.trim(), replied_at: now, status: "resolved" };
+      setTickets((prev) => prev.map((t) => (t.id === selectedTicket.id ? updated : t)));
+      setSelectedTicket(updated);
+      setReplyText("");
+      showToast("Reply sent — ticket resolved");
+      return;
+    }
 
     if (selectedTicket.source === "gmail") {
       await fetch("/api/integrations/gmail/reply", {
@@ -584,32 +641,78 @@ export default function CompanyDetailPage() {
         </div>
 
         <div className="flex flex-col gap-3 mb-4">
-          <div className="bg-white rounded-xl border border-zinc-200 p-5">
-            <div className="flex items-center gap-2.5 mb-3">
-              <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
-                {initials}
+          {messages.length > 0 ? (
+            // Email-pipeline thread: every turn lives in `messages`.
+            messages.map((m) => {
+              const when = new Date(m.created_at).toLocaleDateString("en-US", {
+                month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+              });
+              return m.direction === "inbound" ? (
+                <div key={m.id} className="bg-white rounded-xl border border-zinc-200 p-5">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
+                      {m.from_email.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-900 break-all">{m.from_email}</p>
+                      <p className="text-[11px] text-zinc-400">{when}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{m.body_text}</p>
+                </div>
+              ) : (
+                <div key={m.id} className={`rounded-xl p-5 ml-6 sm:ml-10 border ${
+                  m.status === "failed" ? "bg-red-50 border-red-200" : "bg-indigo-50 border-indigo-100"
+                }`}>
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                      A
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-zinc-900">Support Agent</p>
+                      <p className="text-[11px] text-zinc-400">{when}</p>
+                    </div>
+                    {m.status === "failed" && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">Failed to send</span>
+                    )}
+                    {m.status === "draft" && (
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">Sending…</span>
+                    )}
+                  </div>
+                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{m.body_text}</p>
+                </div>
+              );
+            })
+          ) : (
+            <>
+              <div className="bg-white rounded-xl border border-zinc-200 p-5">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-600 flex-shrink-0">
+                    {initials}
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-900">{selectedTicket.company_name}</p>
+                    <p className="text-[11px] text-zinc-400">{sentAt}</p>
+                  </div>
+                </div>
+                <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selectedTicket.description}</p>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-zinc-900">{selectedTicket.company_name}</p>
-                <p className="text-[11px] text-zinc-400">{sentAt}</p>
-              </div>
-            </div>
-            <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selectedTicket.description}</p>
-          </div>
 
-          {selectedTicket.reply && (
-            <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 ml-6 sm:ml-10">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
-                  A
+              {selectedTicket.reply && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5 ml-6 sm:ml-10">
+                  <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600 flex-shrink-0">
+                      A
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-900">Support Agent</p>
+                      <p className="text-[11px] text-zinc-400">{selectedTicket.replied_at ? timeAgo(selectedTicket.replied_at) : ""}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selectedTicket.reply}</p>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold text-zinc-900">Support Agent</p>
-                  <p className="text-[11px] text-zinc-400">{selectedTicket.replied_at ? timeAgo(selectedTicket.replied_at) : ""}</p>
-                </div>
-              </div>
-              <p className="text-sm text-zinc-700 leading-relaxed whitespace-pre-wrap">{selectedTicket.reply}</p>
-            </div>
+              )}
+            </>
           )}
         </div>
 
@@ -637,10 +740,10 @@ export default function CompanyDetailPage() {
               </button>
               <button
                 onClick={handleSendReply}
-                disabled={!replyText.trim()}
+                disabled={!replyText.trim() || sendingReply}
                 className="text-sm font-semibold bg-zinc-900 text-white px-5 py-2.5 rounded-lg hover:bg-zinc-800 active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Send Reply
+                {sendingReply ? "Sending…" : "Send Reply"}
               </button>
             </div>
           </div>
