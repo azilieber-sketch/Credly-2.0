@@ -176,7 +176,6 @@ export async function POST(req: NextRequest) {
         email:          fromEmail,
         customer_email: fromEmail,
         issue_category: "general",
-        priority:       "medium",
         description:    `Subject: ${subject || "(no subject)"}\n\n${bodyText}`.trim(),
         status:         "new",
         source:         "email",

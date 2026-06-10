@@ -141,7 +141,6 @@ export async function POST(req: NextRequest) {
         company_name:   company?.name ?? "",
         email:          senderEmail,
         issue_category: "general",
-        priority:       "medium",
         description:    `Subject: ${subject}\n\n${bodyText}`.trim(),
         status:         "new",
         source:         "gmail",
