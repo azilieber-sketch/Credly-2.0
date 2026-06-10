@@ -4,16 +4,17 @@ _Last updated: 2026-06-10_
 
 Read this first, then `CLAUDE.md` for architecture/conventions.
 
-> **Where we left off:** Email pipeline code is BUILT and shipped (HEAD
-> `e8e3abc`) — schema, inbound webhook, outbound replies, thread UI, cleanup.
-> See "EMAIL PIPELINE — BUILT" below. **What remains is configuration:**
-> (1) add `EMAIL_WEBHOOK_SECRET` + `ACTIVEPIECES_SEND_WEBHOOK_URL` env vars to
-> the Vercel **ticketflow** project, (2) create the two ActivePieces flows
-> (inbound Gmail trigger → webhook; webhook trigger → Gmail send), (3) run the
-> end-to-end test checklist. Spec used for the build:
+> **Where we left off:** Email pipeline code is BUILT and the **inbound half
+> is LIVE and tested end-to-end** (HEAD `5f4d502`). The ActivePieces inbound
+> flow exists, its Test Step passed against production, and the webhook was
+> self-tested live (tag routing, dedupe replay, threaded reply, unknown-tag →
+> unassigned — all green; synthetic test tickets deleted afterward).
+> **What remains:** the ActivePieces SEND flow (webhook trigger → Gmail send),
+> putting its URL in `ACTIVEPIECES_SEND_WEBHOOK_URL` on Vercel ticketflow,
+> then the spec's full end-to-end checklist with a real mailbox. Spec:
 > `ticketflow-activepieces-email-pipeline-spec.md` (in Azi's Downloads).
 
-## EMAIL PIPELINE — BUILT (2026-06-10, awaiting ActivePieces config)
+## EMAIL PIPELINE — BUILT (2026-06-10); INBOUND LIVE, SEND FLOW PENDING
 
 Locked architecture: ONE shared support inbox; each client forwards their
 support email to `support+<routing_tag>@<shared>`; ActivePieces (verified
@@ -46,22 +47,43 @@ Gmail OAuth code is PARKED as a future premium feature (banner comments on
 - ✅ **Cleanup**: client-side fake Gmail connect removed — Gmail card in
   client Settings is now a "Managed by TicketFlow" Email card, app-password
   modal path gone.
-- **Env vars:** `EMAIL_WEBHOOK_SECRET` is in local `.env.local` (clean, no
-  stray newline). NOT yet on Vercel ticketflow. `ACTIVEPIECES_SEND_WEBHOOK_URL`
-  doesn't exist anywhere yet (created in the AP "send" flow).
+- ✅ **ActivePieces field quirks hardened** (`5f4d502`, `app/_lib/email.ts`):
+  Message-IDs normalized to BARE (no angle brackets) on every store/compare
+  path; reply route re-adds `<>` for outgoing In-Reply-To/References;
+  unresolved `{{template}}` literals / empty / missing `inReplyTo`+
+  `references` treated as not-a-reply; `references` accepted as array or
+  space-separated string; `deliveredTo` may be the raw header line
+  ("Delivered-To: x@y.com") — addresses are regex-extracted.
+- ✅ **Inbound LIVE + verified against production** (2026-06-10): webhook
+  self-test passed all paths — plus-tag routing via `deliveredTo`, dedupe
+  replay (`deduped:true`), threaded customer reply appends to the same
+  ticket, unknown tag → unassigned. Test tickets cleaned up after.
+- ✅ **ActivePieces inbound flow built by Azi; Test Step passed.** Gmail
+  trigger field mapping: `from`/`to` from `message.from.value[0].address`
+  (clean addresses), `deliveredTo` from `message.headerLines[0].line` (raw
+  line), `messageId` arrives WITH angle brackets, `inReplyTo`/`references`
+  from `message.inReplyTo`/`message.references`. A **Gmail label filter
+  gates the trigger** so only labeled support mail enters the pipe (keeps
+  noise/loops out of ticket creation).
+- **Env vars:** `EMAIL_WEBHOOK_SECRET` set in local `.env.local` AND on
+  Vercel ticketflow (verified: endpoint 401s without it).
+  `ACTIVEPIECES_SEND_WEBHOOK_URL` doesn't exist yet (created with the AP
+  "send" flow). Optional: `SUPPORT_FROM_EMAIL`.
+- **Existing company "azi" was given routing tag `azi`** (predated the
+  migration, so its tag was NULL; set via SQL).
 
-### Remaining to go live (Phase 4 — needs Azi in the ActivePieces UI)
-1. ActivePieces cloud account (free) + connect the shared/test Gmail.
-2. **Inbound flow:** Gmail "New Email" trigger → HTTP POST
-   `https://ticketflow-gules.vercel.app/api/email/inbound`, header
-   `Authorization: Bearer <EMAIL_WEBHOOK_SECRET>`, JSON body mapped from
-   trigger fields (incl. `deliveredTo` from the Delivered-To header).
-3. **Send flow:** Webhook trigger → Gmail "Send Email" mapping
-   to/subject/body + In-Reply-To/References from the webhook payload; put
-   the flow's webhook URL in `ACTIVEPIECES_SEND_WEBHOOK_URL` on Vercel.
-4. Add both env vars in Vercel (ticketflow project!) → redeploy.
-5. Run the spec's end-to-end test checklist (tag `lumina`, dedupe replay,
-   unknown-tag → unassigned, client portal read-only).
+### Remaining to go live (send half)
+1. **Send flow in ActivePieces:** Webhook trigger → Gmail "Send Email"
+   mapping to/subject/body + In-Reply-To/References from the webhook payload
+   `{ to, subject, body, inReplyTo, references }` (IDs arrive WITH `<>`,
+   ready for headers); put the flow's webhook URL in
+   `ACTIVEPIECES_SEND_WEBHOOK_URL` on Vercel ticketflow → redeploy.
+2. Run the spec's full end-to-end checklist with a real mailbox: email in →
+   ticket under right company → admin reply lands threaded in the customer
+   inbox → customer reply appends to the same ticket → client portal shows
+   the thread read-only.
+3. Remember the trigger is **polling (~5 min on free tier)** — inbound
+   latency is expected; outbound is instant (webhook).
 >
 > **DB is safe across deploys:** verified nothing in build/deploy touches the
 > database — no seed/migration runs on Vercel. `next build` is the only build
