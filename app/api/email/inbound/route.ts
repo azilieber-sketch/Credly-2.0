@@ -94,32 +94,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Routing: plus-address tag first, sender-domain fallback ────────────────
-  // On auto-forwarded mail the To header keeps the client's original support
-  // address, so check deliveredTo too — that's where Gmail puts the real
-  // recipient (with the +tag).
   const recipientAddresses = [...extractEmails(body.deliveredTo), ...extractEmails(toRaw)];
-  let company: { id: string; name: string } | null = null;
-  let routedBy: "tag" | "domain" | "none" = "none";
 
-  for (const addr of recipientAddresses) {
-    const tag = extractPlusTag(addr);
-    if (!tag) continue;
-    const { data } = await supabase
-      .from("companies").select("id, name").eq("routing_tag", tag).maybeSingle();
-    if (data) { company = data; routedBy = "tag"; break; }
-  }
-
-  if (!company) {
-    // Fallback: a company whose login email shares the sender's domain.
-    const domain = fromEmail.split("@")[1];
-    const { data } = await supabase
-      .from("companies").select("id, name, email").like("email", `%@${domain}`).limit(1).maybeSingle();
-    if (data) { company = data; routedBy = "domain"; }
-  }
-
-  // ── Threading: Message-ID refs → subject+sender fallback → new ticket ──────
+  // ── Threading FIRST: a reply must append to its existing ticket before any
+  // tag routing gets a chance to open a duplicate under the company. ─────────
+  // NOTE: the ActivePieces Gmail send action can't set In-Reply-To/References
+  // on outbound replies, so the customer's reply references a Message-ID we
+  // never stored — the subject+sender fallback carries the load in practice.
   let ticketId: string | null = null;
+  let routedBy: "thread" | "tag" | "domain" | "none" = "none";
 
   const threadIds = [inReplyTo, ...references].filter((v): v is string => !!v);
   if (threadIds.length) {
@@ -129,20 +112,50 @@ export async function POST(req: NextRequest) {
   }
 
   if (!ticketId && subject) {
-    // Same customer replying on the same (normalized) subject to an open ticket.
+    // Same customer (case-insensitive) replying on the same normalized
+    // subject. Includes RESOLVED tickets — our own replies auto-resolve, so
+    // the customer's next message usually targets a resolved ticket; it
+    // appends and reopens rather than spawning a duplicate.
     const { data: candidates } = await supabase
       .from("tickets")
-      .select("id, description")
-      .eq("customer_email", fromEmail)
-      .in("status", ["open", "in-progress"])
+      .select("id, description, status")
+      .ilike("customer_email", fromEmail)
       .order("created_at", { ascending: false })
       .limit(20);
     const wanted = normalizeSubject(subject);
-    const match = candidates?.find((t) => {
+    const matches = (candidates ?? []).filter((t) => {
       const firstLine = (t.description ?? "").split("\n")[0].replace(/^Subject:\s*/i, "");
       return normalizeSubject(firstLine) === wanted && wanted !== "";
     });
+    // Prefer a still-active ticket; otherwise the most recent resolved one.
+    const match = matches.find((t) => t.status !== "resolved") ?? matches[0];
     if (match) ticketId = match.id;
+  }
+
+  if (ticketId) routedBy = "thread";
+
+  // ── Routing (new tickets only): plus-address tag, sender-domain fallback ───
+  // On auto-forwarded mail the To header keeps the client's original support
+  // address, so check deliveredTo too — that's where Gmail puts the real
+  // recipient (with the +tag).
+  let company: { id: string; name: string } | null = null;
+
+  if (!ticketId) {
+    for (const addr of recipientAddresses) {
+      const tag = extractPlusTag(addr);
+      if (!tag) continue;
+      const { data } = await supabase
+        .from("companies").select("id, name").eq("routing_tag", tag).maybeSingle();
+      if (data) { company = data; routedBy = "tag"; break; }
+    }
+
+    if (!company) {
+      // Fallback: a company whose login email shares the sender's domain.
+      const domain = fromEmail.split("@")[1];
+      const { data } = await supabase
+        .from("companies").select("id, name, email").ilike("email", `%@${domain}`).limit(1).maybeSingle();
+      if (data) { company = data; routedBy = "domain"; }
+    }
   }
 
   let createdTicket = false;
@@ -205,6 +218,6 @@ export async function POST(req: NextRequest) {
     ticketId,
     createdTicket,
     routedBy,
-    unassigned: !company,
+    unassigned: createdTicket && !company,
   });
 }

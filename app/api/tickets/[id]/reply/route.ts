@@ -39,10 +39,25 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   const { data: ticket } = await supabase
     .from("tickets")
-    .select("id, email, customer_email, description, last_inbound_message_id, status")
+    .select("id, email, customer_email, company_id, description, last_inbound_message_id, status")
     .eq("id", ticketId)
     .maybeSingle();
   if (!ticket) return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
+
+  // Reply-To: the tagged support address (support+<tag>@…). The Gmail label
+  // filter only labels tagged mail, so without this the customer's reply goes
+  // to the bare address and never enters the pipeline. Needs SUPPORT_FROM_EMAIL
+  // set to the real shared inbox address.
+  let replyTo: string | null = null;
+  const supportAddr = process.env.SUPPORT_FROM_EMAIL ?? "";
+  if (supportAddr.includes("@") && ticket.company_id) {
+    const { data: co } = await supabase
+      .from("companies").select("routing_tag").eq("id", ticket.company_id).maybeSingle();
+    if (co?.routing_tag) {
+      const [local, domain] = supportAddr.split("@");
+      replyTo = `${local}+${co.routing_tag}@${domain}`;
+    }
+  }
 
   const toEmail = ticket.customer_email || ticket.email;
   if (!toEmail) return NextResponse.json({ error: "Ticket has no customer email to reply to." }, { status: 400 });
@@ -99,6 +114,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         to: toEmail,
         subject,
         body: replyText,
+        replyTo,
         inReplyTo: inReplyTo ? toRfcMessageId(inReplyTo) : null,
         references: inReplyTo ? toRfcMessageId(inReplyTo) : null,
       }),
