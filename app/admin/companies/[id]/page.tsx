@@ -21,7 +21,11 @@ interface SupabaseCompany {
   credits_used: number;
   status: "active" | "suspended";
   created_at: string;
+  routing_tag: string | null;
 }
+
+// Same slug rule the DB CHECK enforces on companies.routing_tag.
+const ROUTING_TAG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 type CompanyStatus = "active" | "depleted" | "suspended";
 
@@ -311,6 +315,9 @@ export default function CompanyDetailPage() {
   const [showDelete,       setShowDelete]       = useState(false);
   const [deleting,         setDeleting]         = useState(false);
   const [deleteErr,        setDeleteErr]        = useState<string | null>(null);
+  const [editingTag,       setEditingTag]       = useState(false);
+  const [tagDraft,         setTagDraft]         = useState("");
+  const [savingTag,        setSavingTag]        = useState(false);
 
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -367,6 +374,25 @@ export default function CompanyDetailPage() {
     addActivityLog({ type: "credit_issued", company: company.name, companyId: id, description: `${plan.credits.toLocaleString()} credits issued (${plan.name} plan)`, amount: plan.priceStr });
     await load();
     showToast(`${plan.credits.toLocaleString()} credits added`);
+  };
+
+  const handleSaveRoutingTag = async () => {
+    if (!company || !supabase) return;
+    const tag = tagDraft.trim().toLowerCase();
+    if (!ROUTING_TAG_RE.test(tag)) {
+      showToast("Tag must be lowercase letters, numbers, and dashes");
+      return;
+    }
+    setSavingTag(true);
+    const { error } = await supabase.from("companies").update({ routing_tag: tag }).eq("id", id);
+    setSavingTag(false);
+    if (error) {
+      showToast(error.code === "23505" ? "That tag is already taken" : "Could not save the routing tag");
+      return;
+    }
+    setEditingTag(false);
+    await load();
+    showToast("Routing tag updated");
   };
 
   const handleToggleSuspend = async () => {
@@ -727,6 +753,49 @@ export default function CompanyDetailPage() {
           </div>
         </div>
         <p className="text-sm text-zinc-400">{company.email} · {company.industry} · Joined {joinedDate}</p>
+
+        {/* Routing tag — where this company's support mail gets sorted from */}
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Routing tag</span>
+          {editingTag ? (
+            <>
+              <input
+                value={tagDraft}
+                onChange={(e) => setTagDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSaveRoutingTag(); if (e.key === "Escape") setEditingTag(false); }}
+                autoFocus
+                spellCheck={false}
+                className="text-xs font-mono px-2 py-1 rounded-md border border-zinc-300 text-zinc-800 w-40 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
+                placeholder="e.g. acme"
+              />
+              <button
+                onClick={handleSaveRoutingTag}
+                disabled={savingTag}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 disabled:opacity-40 transition-colors"
+              >
+                {savingTag ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => setEditingTag(false)}
+                className="text-xs font-medium text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-zinc-100 border border-zinc-200 text-zinc-700">
+                {company.routing_tag ?? "not set"}
+              </span>
+              <button
+                onClick={() => { setTagDraft(company.routing_tag ?? ""); setEditingTag(true); }}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 transition-colors"
+              >
+                Edit
+              </button>
+            </>
+          )}
+        </div>
 
         <div className="flex flex-wrap gap-2 mt-4">
           <button

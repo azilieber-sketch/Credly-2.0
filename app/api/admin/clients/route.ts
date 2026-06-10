@@ -8,6 +8,31 @@ import { getServiceSupabase } from "@/app/_lib/supabase-server";
 const ADMIN_EMAIL = "admin@credly.com";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Routing tag: lowercase slug that routes inbound mail (support+<tag>@…) to
+// this company. Generated from the company name; admin can edit it later.
+function slugifyTag(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40);
+}
+
+async function uniqueRoutingTag(
+  supabase: ReturnType<typeof getServiceSupabase>,
+  name: string,
+): Promise<string> {
+  const base = slugifyTag(name) || "client";
+  for (let i = 0; i < 50; i++) {
+    const candidate = i === 0 ? base : `${base}-${i + 1}`;
+    const { data } = await supabase
+      .from("companies").select("id").eq("routing_tag", candidate).maybeSingle();
+    if (!data) return candidate;
+  }
+  return `${base}-${Date.now().toString(36)}`;
+}
+
 type Guard =
   | { ok: true; supabase: ReturnType<typeof getServiceSupabase> }
   | { ok: false; status: number; error: string };
@@ -64,9 +89,10 @@ export async function POST(req: NextRequest) {
 
   // 2) Create the matching company row (email MUST match the auth user — the app
   //    links a logged-in user to their company by email).
+  const routingTag = await uniqueRoutingTag(supabase, name);
   const { data: company, error: coErr } = await supabase
     .from("companies")
-    .insert({ name, email, industry, credits, credits_used: 0, status: "active" })
+    .insert({ name, email, industry, credits, credits_used: 0, status: "active", routing_tag: routingTag })
     .select()
     .single();
 

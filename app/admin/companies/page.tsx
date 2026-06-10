@@ -61,7 +61,7 @@ function AddClientModal({
   const [showPwd,  setShowPwd]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [saving,   setSaving]   = useState(false);
-  const [result,   setResult]   = useState<{ email: string; password: string } | null>(null);
+  const [result,   setResult]   = useState<{ email: string; password: string; routingTag: string | null } | null>(null);
   const [copied,   setCopied]   = useState<string | null>(null);
 
   const copy = (label: string, text: string) => {
@@ -95,7 +95,7 @@ function AddClientModal({
     setSaving(false);
     if (!res.ok) { setError(json.error || "Something went wrong creating the client."); return; }
 
-    setResult({ email: email.trim(), password });
+    setResult({ email: email.trim(), password, routingTag: json.company?.routing_tag ?? null });
     onAdded();
   };
 
@@ -137,6 +137,18 @@ function AddClientModal({
                   </button>
                 </div>
               </div>
+              {result.routingTag && (
+                <div className="bg-zinc-50 border border-zinc-200 rounded-lg p-3">
+                  <p className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">Email routing tag</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-mono font-medium text-zinc-900 break-all">{result.routingTag}</span>
+                    <button onClick={() => copy("tag", result.routingTag!)} className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex-shrink-0">
+                      {copied === "tag" ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 mt-1">Their support mail forwards to support+<span className="font-mono">{result.routingTag}</span>@ the shared inbox.</p>
+                </div>
+              )}
               <button
                 onClick={() => copy("both", `Email: ${result.email}\nPassword: ${result.password}`)}
                 className="text-xs font-medium text-zinc-500 hover:text-zinc-700 self-start"
