@@ -89,9 +89,9 @@ Gmail OAuth code is PARKED as a future premium feature (banner comments on
 - ✅ Shared config `app/_lib/ticket-status.ts` (TICKET_STATUS_CFG +
   ATTENTION_STATUSES = new/read/customer-replied) replaces 5 duplicated
   per-page configs. **Urgency/priority UI removed everywhere** (filters,
-  sorts, badges, dots, KPI tiles — replaced by status). ⚠️ The `priority`
-  DB column still EXISTS (dropping = destructive, needs Azi's approval);
-  inserts still write `medium`.
+  sorts, badges, dots, KPI tiles — replaced by status). The `priority`
+  column was then DROPPED with Azi's approval (migration
+  `20260610160000_drop_ticket_priority`); no code writes or reads it.
 - ✅ Conversation threads (`messages`) now render in ALL ticket views:
   admin company detail, admin Global Inbox (also routes email replies via
   the reply endpoint now), and the client portal (read-only). Legacy
